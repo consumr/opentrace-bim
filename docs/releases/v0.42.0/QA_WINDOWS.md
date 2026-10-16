@@ -1,6 +1,6 @@
 # v0.42.0 — Windows/IngeTrazo acceptance checklist
 
-**All cases initially NOT EXECUTED.** Record Windows build, IngeTrazo commit/version (target 0.5.7+), language, GPU driver, previous plugin and install path. Use disposable/sanitized `.igz` files and independent backups.
+**Maintainer acceptance:** the v0.42.0 package has been tested and approved in IngeTrazo. This is an optional **detailed regression checklist**, not a statement that the maintainer did not test. Unchecked items mean no individually documented result in this checklist. Record Windows build, IngeTrazo commit/version (target 0.5.7+), language, GPU driver, previous plugin and install path. Use disposable/sanitized `.igz` files and independent backups.
 
 - [ ] Load plugin, Home, tool palettes and contextual panels without crash or duplicate menus; focus, Escape/Space and scrollbar behavior.
 - [ ] Insert swing, glazed/paneled, arched, sliding, pocket and opening-only doors by click and numeric input; inspect front/back geometry.
@@ -24,4 +24,4 @@
 
 Include ID, OS/host/plugin versions, exact reproduction steps, expected/actual behavior, console logs, screenshot/video, sanitized `.igz` sample, Undo/Redo impact and severity.
 
-**Gate:** technical review and a pre-release may precede acceptance; a stable release requires all critical checklist items and explicit maintainer signoff.
+**Release decision:** Maintainer has signed off on the official v0.42.0 Alpha publication. Use this checklist for follow-up regression, platform compatibility and issue tracking; it is not a new prerequisite for the already approved release.

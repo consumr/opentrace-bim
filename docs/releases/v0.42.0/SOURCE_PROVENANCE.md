@@ -20,6 +20,6 @@
 
 - 100 base tests OK, 71 door/editor tests OK, 3 merge integration tests OK, 12 focused door regressions OK (some overlap).
 - Synthetic V7/V8 checks, 36 synthetic combinations, Python compile and integrity checks reported OK.
-- PySide6 and IngeTrazo/Windows live GUI were unavailable. External IFC round trip, GPU rendering and `.igz` host persistence **have not been verified**.
+- PySide6 and IngeTrazo/Windows live GUI were unavailable **to the automated assistant environment**, but **the maintainer confirms in-host functional testing and approval of this version**. Individual external IFC interoperability, GPU configurations and legacy `.igz` compatibility combinations are not independently verified by the assistant.
 
 **Not a historical diff:** this candidate's feature inventory must not be represented as a proven `v0.41.x→v0.42.0` commit-by-commit changelog. The official repository's latest publicly published release observed during preparation was v0.12.9, which does not establish all intervening project history.

@@ -1,6 +1,6 @@
-# OpenTrace BIM 0.42.0 — Release Candidate
+# OpenTrace BIM v0.42.0 — Alpha release
 
-OpenTrace BIM 0.42.0 integrates the V9.1 hosted-door engine with expanded wall/material, IFC, classification and library workflows. This is a **pre-release candidate until Windows/IngeTrazo graphical acceptance is complete**.
+OpenTrace BIM 0.42.0 integrates the V9.1 hosted-door engine with expanded wall/material, IFC, classification and library workflows. **This package has been tested and approved by the maintainer in IngeTrazo.** The wider project remains in **Alpha development**, with improvements and a complete window engine still planned.
 
 ## What's new
 
@@ -14,7 +14,7 @@ OpenTrace BIM 0.42.0 integrates the V9.1 hosted-door engine with expanded wall/m
 
 ## Limitations and risks
 
-- Not yet visually validated on Windows/IngeTrazo; `.igz` save/reopen and external IFC round trips require real-host testing.
+- The maintainer confirms in-host tests and approval of the overall package; specific legacy `.igz` save/reopen configurations and external IFC round trips remain useful regression targets, not a claim that the release was never tested.
 - Pocket sliding-door geometry and IFC4.3 conformance remain experimental. There is **no new complete window engine**.
 - Grooves are shallow visual relief, not boolean-cut channels.
 - Removing the perimeter from glazed/panel leaves may create an unsupported assembly.
@@ -23,7 +23,7 @@ OpenTrace BIM 0.42.0 integrates the V9.1 hosted-door engine with expanded wall/m
 
 ## Validation completed before GitHub integration
 
-100 general tests, 71 local door/editor tests, 3 merge tests, 12 focused door regression tests (some suites overlap), synthetic V7/V8 checks, compilation and archive integrity. **These do not substitute for live GUI testing.**
+100 general tests, 71 local door/editor tests, 3 merge tests, 12 focused door regression tests (some suites overlap), synthetic V7/V8 checks, compilation and archive integrity. **Automated testing complements the maintainer's completed in-host testing.** It does not establish certification of all external IFC consumers.
 
 ## Installation
 

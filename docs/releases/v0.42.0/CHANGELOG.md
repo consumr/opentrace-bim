@@ -1,6 +1,6 @@
-# OpenTrace BIM — Consolidated changes in v0.42.0 candidate
+# OpenTrace BIM — Consolidated changes in v0.42.0 Alpha
 
-**Scope:** Features in the integrated 2026-10-16 local archive, not a commit/tag diff from any unverified 0.41.x series. The original archive declared internal `0.12.9`; the requested release identity is `0.42.0`. Presence in source does not imply completed Windows acceptance.
+**Scope:** Features in the integrated 2026-10-16 local archive, not a commit/tag diff from any unverified 0.41.x series. The original archive declared internal `0.12.9`; the requested release identity is `0.42.0`. The maintainer confirms in-host testing and approval of the v0.42.0 build. Feature inventory in source does not amount to certification of all external interoperability scenarios.
 
 ## Doors — motor and geometry
 
