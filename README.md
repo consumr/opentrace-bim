@@ -34,7 +34,7 @@ Pedimos apenas que os créditos originais sejam preservados, conforme a licença
 > Formerly developed under the working names **IngeTrazo Architecture** / **Parametric Architecture**.
 
 ![Status](https://img.shields.io/badge/status-active%20development-2ea44f)
-![Tested build](https://img.shields.io/badge/tested-0.42.2--alpha-blue)
+![Current package](https://img.shields.io/badge/package-v0.44.0-blue)
 ![IngeTrazo](https://img.shields.io/badge/IngeTrazo-0.5.7%2B-blueviolet)
 ![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 
@@ -44,11 +44,11 @@ The current host is [IngeTrazo](https://ingetrazo.com/). The long-term architect
 
 ## Current status
 
-**Latest published Alpha build:** [**v0.42.2 Alpha**](https://github.com/lelopes05/opentrace-bim/releases/tag/v0.42.2).
+**Latest published package:** [**v0.44.0**](https://github.com/lelopes05/opentrace-bim/releases/tag/v0.44.0).
 
-The v0.42.0 engine was tested and approved by the maintainer in Windows/IngeTrazo; v0.42.2 restores the button and opt-in update checks while keeping the GitHub-direct release lookup; verified by automated tests. OpenTrace BIM remains in active Alpha development, with further refinement and a complete parametric window engine planned.
+The v0.44.0 package fixes the Home update controls and independently checks OpenTrace BIM's own GitHub Releases, with SHA-256 verification. Offline updater tests passed, but Windows/IngeTrazo GUI verification of this specific package is still pending. Earlier v0.12.9 installations still use the separate IngeTrazo catalogue and require one manual install or a catalogue update to migrate. OpenTrace BIM remains in active development, with further refinement and a complete parametric window engine planned.
 
-**[Download OpenTrace BIM v0.42.0 ZIP](https://github.com/lelopes05/opentrace-bim/releases/download/v0.42.0/OpenTrace_BIM-v0.42.2.zip)** · [Source code](OpenTrace_BIM/) · [Release notes](docs/releases/v0.42.0/RELEASE_NOTES.md)
+**[Download OpenTrace BIM v0.44.0 ZIP](https://github.com/lelopes05/opentrace-bim/releases/download/v0.44.0/OpenTrace_BIM-v0.44.0.zip)** · [Source code](OpenTrace_BIM/) · [Release notes](docs/releases/v0.44.0/RELEASE_NOTES.md)
 
 See [FEATURES.md](FEATURES.md), [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md) for the capability matrix and history.
 
