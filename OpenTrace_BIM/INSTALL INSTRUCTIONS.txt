@@ -1,4 +1,4 @@
-OpenTrace BIM v0.42.1 — Alpha
+OpenTrace BIM v0.42.2 — Alpha
 INSTALLATION / INSTALLAÇÃO — MANUAL ONLY
 
 ENGLISH
