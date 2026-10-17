@@ -34,7 +34,7 @@ Pedimos apenas que os créditos originais sejam preservados, conforme a licença
 > Formerly developed under the working names **IngeTrazo Architecture** / **Parametric Architecture**.
 
 ![Status](https://img.shields.io/badge/status-active%20development-2ea44f)
-![Tested build](https://img.shields.io/badge/tested-0.11.1-blue)
+![Tested build](https://img.shields.io/badge/tested-0.42.0--alpha-blue)
 ![IngeTrazo](https://img.shields.io/badge/IngeTrazo-0.5.7%2B-blueviolet)
 ![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 
@@ -44,15 +44,13 @@ The current host is [IngeTrazo](https://ingetrazo.com/). The long-term architect
 
 ## Current status
 
-**Latest user-tested build:** `0.11.1`
+**Latest published, user-tested build:** [**v0.42.0 Alpha**](https://github.com/lelopes05/opentrace-bim/releases/tag/v0.42.0).
 
-The tested build already covers a broad architectural modeling workflow. It is still experimental software, but the core objects survive save/close/reopen in `.igz` files and remain parametrically editable.
+The maintainer tested and approved this version in Windows/IngeTrazo. OpenTrace BIM remains in active Alpha development, with further refinement and a complete parametric window engine planned.
 
-**0.11.1** adds the unified OpenTrace BIM panel, expanded presets/catalog work, profile folders, the bundled Layer Combinations companion with preset templates, and opt-in update checks.
+**[Download OpenTrace BIM v0.42.0 ZIP](https://github.com/lelopes05/opentrace-bim/releases/download/v0.42.0/OpenTrace_BIM-v0.42.0.zip)** · [Source code](OpenTrace_BIM/) · [Release notes](docs/releases/v0.42.0/RELEASE_NOTES.md)
 
-See [FEATURES.md](FEATURES.md) for the detailed capability matrix and [ROADMAP.md](ROADMAP.md) for active development.
-
-For version-by-version changes see [CHANGELOG.md](CHANGELOG.md). The 0.12.9 release candidate is documented in [release notes](release-prep/0.12.9/RELEASE_NOTES.md) and the [technical audit](release-prep/0.12.9/AUDIT_SUMMARY.md); it is **not** the currently published build.
+See [FEATURES.md](FEATURES.md), [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md) for the capability matrix and history.
 
 ## Development previews
 
@@ -240,14 +238,14 @@ The goal is to let an office build a library once and reuse it across projects �
 ## Installation — tested IngeTrazo build
 
 1. In IngeTrazo, open **Extensions → Open plugins folder**.
-2. Copy the `arquitetura_parametrica` folder into the plugin directory.
+2. Extract the release ZIP and copy the complete `OpenTrace_BIM` folder into the plugin directory.
 3. Restart IngeTrazo.
 
 On Windows the user plugin directory is normally:
 
 `%APPDATA%\ingetrazo\plugins\`
 
-The package/folder name remains `arquitetura_parametrica` for compatibility while the project transitions to the **OpenTrace BIM** name.
+Confirm that `OpenTrace_BIM/__init__.py` is directly inside the plugins directory (no duplicate nested folder). Replace the whole old `OpenTrace_BIM` folder rather than mixing versions.
 
 ---
 
