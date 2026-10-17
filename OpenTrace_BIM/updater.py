@@ -212,6 +212,14 @@ def _install_package(data: bytes, expected_version: str, expected_sha: str):
         backup = tmp / "backup"
         shutil.copytree(current_dir, backup)
 
+        new_files = {
+            p.relative_to(root).as_posix()
+            for p in root.rglob("*") if p.is_file()
+        }
+        backup_files = {
+            p.relative_to(backup).as_posix()
+            for p in backup.rglob("*") if p.is_file()
+        }
         try:
             old_manifest_path = current_dir / "PACKAGE_MANIFEST.txt"
             old_owned = set()
@@ -230,16 +238,6 @@ def _install_package(data: bytes, expected_version: str, expected_sha: str):
                         continue
                     old_owned.add(rel.as_posix())
 
-            backup_files = {
-                p.relative_to(backup).as_posix()
-                for p in backup.rglob("*")
-                if p.is_file()
-            }
-            new_files = {
-                p.relative_to(root).as_posix()
-                for p in root.rglob("*")
-                if p.is_file()
-            }
 
             # Remove only files explicitly owned by the previous package.
             for rel in sorted(old_owned - new_files, reverse=True):
@@ -278,6 +276,7 @@ class UpdateManager(QObject):
 
     check_result = Signal(object, object, bool)
     install_result = Signal(bool, str, str)
+    status_changed = Signal(str)
 
     def __init__(self, parent_widget):
         super().__init__(parent_widget)
@@ -298,7 +297,12 @@ class UpdateManager(QObject):
                 )
             return
 
+        if self._installing:
+            if manual:
+                QMessageBox.information(self.parent_widget, "Updates", "Installation in progress.")
+            return
         self._checking = True
+        self.status_changed.emit("Checking OpenTrace BIM releases on GitHub…")
 
         def worker():
             try:
@@ -315,6 +319,7 @@ class UpdateManager(QObject):
         self._checking = False
 
         if error:
+            self.status_changed.emit("Update check failed. Click Check for updates to retry.")
             if manual:
                 QMessageBox.warning(
                     self.parent_widget,
@@ -325,6 +330,7 @@ class UpdateManager(QObject):
 
         available = str(entry.get("version", ""))
         if _version_tuple(available) <= _version_tuple(__version__):
+            self.status_changed.emit(f"OpenTrace BIM {__version__} — no newer published version.")
             if manual:
                 QMessageBox.information(
                     self.parent_widget,
@@ -333,6 +339,7 @@ class UpdateManager(QObject):
                 )
             return
 
+        self.status_changed.emit(f"OpenTrace BIM {available} available on GitHub.")
         box = QMessageBox(self.parent_widget)
         box.setIcon(QMessageBox.Information)
         box.setWindowTitle("OpenTrace BIM Update")
@@ -358,6 +365,7 @@ class UpdateManager(QObject):
         self._installing = True
 
         version = str(entry["version"])
+        self.status_changed.emit(f"Downloading OpenTrace BIM {version} from GitHub…")
         self._progress = QProgressDialog(
             f"Downloading and installing OpenTrace BIM {version}…",
             None,
@@ -400,6 +408,7 @@ class UpdateManager(QObject):
             self._progress = None
 
         if ok:
+            self.status_changed.emit(f"OpenTrace BIM {version} installed. Restart IngeTrazo.")
             QMessageBox.information(
                 self.parent_widget,
                 "Update installed",
@@ -407,6 +416,7 @@ class UpdateManager(QObject):
                 "Restart IngeTrazo to complete the update.",
             )
         else:
+            self.status_changed.emit("Update failed; the previous installation was preserved or restored.")
             QMessageBox.critical(
                 self.parent_widget,
                 "Update failed",
