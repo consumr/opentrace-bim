@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Opt-in update checks for OpenTrace BIM.
 
-Automatic checking only reads the official IngeTrazo extensions catalog.
+Update checks read published OpenTrace BIM releases on GitHub directly.
 No extension package is downloaded until the user explicitly clicks
 "Download and install".
 """
@@ -24,11 +24,12 @@ from PySide6.QtWidgets import QMessageBox, QProgressDialog
 
 from . import __version__
 
-CATALOG_URL = (
-    "https://raw.githubusercontent.com/"
-    "ingelibre/ingetrazo-extensions/main/catalog.json"
+RELEASES_URL = (
+    "https://api.github.com/repos/lelopes05/opentrace-bim/releases?per_page=30"
 )
-CATALOG_ID = "opentrace_bim"
+DOWNLOAD_PREFIX = (
+    "https://github.com/lelopes05/opentrace-bim/releases/download/"
+)
 SETTINGS_KEY = "opentrace_bim/check_updates_automatically"
 MAX_CATALOG_BYTES = 2 * 1024 * 1024
 MAX_PACKAGE_BYTES = 10 * 1024 * 1024
@@ -63,16 +64,55 @@ def _request_bytes(url: str, *, limit: int, timeout: int = 12) -> bytes:
     return data
 
 
-def _catalog_entry() -> dict:
-    raw = _request_bytes(CATALOG_URL, limit=MAX_CATALOG_BYTES)
-    payload = json.loads(raw.decode("utf-8"))
-    for entry in payload.get("extensions", []):
-        if entry.get("id") == CATALOG_ID:
-            required = ("version", "download", "sha256")
-            if not all(entry.get(key) for key in required):
-                raise RuntimeError("The OpenTrace BIM entry in the official catalogue is incomplete.")
-            return dict(entry)
-    raise RuntimeError("OpenTrace BIM was not found in the official catalogue.")
+def _release_entry() -> dict:
+    """Find the newest published, hash-verified release on our GitHub.
+
+    GitHub's Release asset digest is authoritative for download integrity.
+    We intentionally do not depend on IngeTrazo's separately maintained
+    extension catalogue, which may lag behind our own publication.
+    """
+    raw = _request_bytes(RELEASES_URL, limit=MAX_CATALOG_BYTES)
+    releases = json.loads(raw.decode("utf-8"))
+    if not isinstance(releases, list):
+        raise RuntimeError("The OpenTrace BIM GitHub release feed is invalid.")
+
+    candidates = []
+    for release in releases:
+        if not isinstance(release, dict) or release.get("draft"):
+            continue
+
+        tag = str(release.get("tag_name", ""))
+        if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+            continue
+        version = tag[1:]
+        filename = f"OpenTrace_BIM-{tag}.zip"
+        expected_url = DOWNLOAD_PREFIX + f"{tag}/{filename}"
+
+        for asset in release.get("assets", []):
+            if not isinstance(asset, dict):
+                continue
+            if asset.get("name") != filename or asset.get("state") != "uploaded":
+                continue
+            digest = str(asset.get("digest") or "")
+            if not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
+                continue
+            if asset.get("browser_download_url") != expected_url:
+                continue
+            size = asset.get("size")
+            if not isinstance(size, int) or not 0 < size <= MAX_PACKAGE_BYTES:
+                continue
+            candidates.append({
+                "version": version,
+                "download": expected_url,
+                "sha256": digest.split(":", 1)[1].lower(),
+            })
+            break
+
+    if not candidates:
+        raise RuntimeError(
+            "No published OpenTrace BIM release with a verified ZIP was found."
+        )
+    return max(candidates, key=lambda item: _version_tuple(item["version"]))
 
 
 def _safe_zip_members(zf: zipfile.ZipFile):
@@ -132,7 +172,7 @@ def _validate_package(data: bytes, expected_version: str):
         match = re.search(r'__version__\s*=\s*"([^"]+)"', init_text)
         if not match or match.group(1) != str(expected_version):
             raise RuntimeError(
-                "The package internal version does not match the catalogue version."
+                "The package internal version does not match the GitHub release version."
             )
         for name in names:
             if not name.endswith(".py"):
@@ -146,14 +186,14 @@ def _install_package(data: bytes, expected_version: str, expected_sha: str):
     got = _validate_package(data, expected_version)
     if got.lower() != str(expected_sha).lower():
         raise RuntimeError(
-            "The update SHA-256 does not match the official catalogue."
+            "The update SHA-256 does not match the published GitHub asset."
         )
 
     current_dir = Path(__file__).resolve().parent
     if not os.access(current_dir, os.W_OK):
         raise RuntimeError(
             "The current OpenTrace BIM folder is not writable. "
-            "Install the update through the IngeTrazo catalogue."
+            "Install the update using a writable plugin directory."
         )
 
     with tempfile.TemporaryDirectory(prefix="opentrace-update-") as td:
@@ -176,13 +216,19 @@ def _install_package(data: bytes, expected_version: str, expected_sha: str):
             old_manifest_path = current_dir / "PACKAGE_MANIFEST.txt"
             old_owned = set()
             if old_manifest_path.is_file():
-                old_owned = {
-                    line.strip()
-                    for line in old_manifest_path.read_text(
-                        encoding="utf-8"
-                    ).splitlines()
-                    if line.strip()
-                }
+                # The package manifest stores "sha256  relative/path",
+                # not bare filenames. Earlier updaters could not identify
+                # removed package-owned files because they kept the hash.
+                for line in old_manifest_path.read_text(
+                    encoding="utf-8"
+                ).splitlines():
+                    match = re.fullmatch(r"[a-fA-F0-9]{64}  (.+)", line.strip())
+                    if match is None:
+                        continue
+                    rel = Path(match.group(1))
+                    if rel.is_absolute() or ".." in rel.parts:
+                        continue
+                    old_owned.add(rel.as_posix())
 
             backup_files = {
                 p.relative_to(backup).as_posix()
@@ -228,7 +274,7 @@ def _install_package(data: bytes, expected_version: str, expected_sha: str):
 
 
 class UpdateManager(QObject):
-    """Background catalog checker and explicit installer."""
+    """Background GitHub release checker and explicit installer."""
 
     check_result = Signal(object, object, bool)
     install_result = Signal(bool, str, str)
@@ -256,7 +302,7 @@ class UpdateManager(QObject):
 
         def worker():
             try:
-                entry = _catalog_entry()
+                entry = _release_entry()
                 error = None
             except Exception as exc:
                 entry = None
@@ -292,7 +338,7 @@ class UpdateManager(QObject):
         box.setWindowTitle("OpenTrace BIM Update")
         box.setText(f"OpenTrace BIM {available} is available.")
         box.setInformativeText(
-            "Automatic checking only queries the official catalogue; "
+            "Automatic checking only queries OpenTrace BIM GitHub Releases; "
             "no update has been downloaded.\n\n"
             "You can download and install now. After installation, "
             "IngeTrazo must be restarted to use the new version."
