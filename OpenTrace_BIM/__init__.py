@@ -5,7 +5,7 @@ Development draft: implementation only; runtime validation is pending.
 Keep this package's directory name stable: it identifies the extension.
 """
 
-__version__ = "0.42.1"
+__version__ = "0.42.2"
 
 
 def _setup_bundled_layer_combinations(app):

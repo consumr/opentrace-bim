@@ -182,7 +182,9 @@ class ArchitectureSuitePanel:
         # overlay reference after the sidebar is ready.
         self.context_bar = None
         englishize_widget(self.panel)
-        # EXPERIMENTAL: no automatic update activity (never touch official channel).
+        # Check automatically only when the user has explicitly opted in.
+        if self.auto_update_check.isChecked():
+            self._auto_check_timer.start(3000)
 
     def apply_theme(self):
         """ThemeWatcher dispatches the sidebar through this single style path."""
@@ -304,7 +306,7 @@ class ArchitectureSuitePanel:
         update_lay.setSpacing(6)
         update_lay.addWidget(QLabel(f"<b>OpenTrace BIM {__version__}</b>"))
         self.update_status = QLabel(
-            "Checks only the official catalog; no package is installed without confirmation.")
+            "Checks OpenTrace BIM GitHub Releases; installation requires confirmation.")
         self.update_status.setWordWrap(True)
         self.update_status.setProperty("visualRole", "hint")
         update_lay.addWidget(self.update_status)
@@ -314,12 +316,15 @@ class ArchitectureSuitePanel:
         update_lay.addWidget(self.update_button)
         lay.addWidget(update_box)
 
-        # Completely isolated testing package: no remote checks or installation.
-        self.update_manager = None
-        self.update_status.setText("ISOLATED EXPERIMENTAL PACKAGE: updates disabled.")
-        self.auto_update_check.setChecked(False)
-        self.auto_update_check.setEnabled(False)
-        self.update_button.setEnabled(False)
+        # Single, real updater instance owned by the Home panel.
+        # Do not contact the network until a manual click or opt-in startup check.
+        from .updater import UpdateManager, auto_check_enabled
+        self.update_manager = UpdateManager(content)
+        self.auto_update_check.setChecked(auto_check_enabled())
+        self.auto_update_check.toggled.connect(self._auto_update_toggled)
+        self.update_button.clicked.connect(
+            lambda _checked=False: self.update_manager.check(manual=True)
+        )
 
         lay.addStretch(1)
         scroll.setWidget(content)
@@ -1287,12 +1292,17 @@ class ArchitectureSuitePanel:
             context if isinstance(context,str) else None)
 
     def _auto_update_toggled(self, enabled):
-        # Experimental build must never contact the official update channel.
-        return
+        from .updater import set_auto_check_enabled
+        set_auto_check_enabled(bool(enabled))
+        if enabled:
+            self._auto_check_timer.start(1500)
+        else:
+            self._auto_check_timer.stop()
 
     def _auto_check_updates_on_startup(self):
-        # Deliberately disabled, including persisted QSettings from a release.
-        return
+        from .updater import auto_check_enabled
+        if auto_check_enabled() and self.update_manager is not None:
+            self.update_manager.check(manual=False)
 
     def _wire(self):
         for key,ctrl in self.controllers.items():
