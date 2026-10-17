@@ -1,13 +1,34 @@
-# Installing OpenTrace BIM 0.42.2 — Alpha
+# OpenTrace BIM v0.44.0 — instalação e atualizações
 
-**Host:** IngeTrazo 0.5.7+ (target; verify the installed host build). This Alpha release was functionally tested and approved by the maintainer on Windows/IngeTrazo; wider compatibility testing continues.
+## Instalação no IngeTrazo
 
-1. **Close IngeTrazo** and back up your existing extension folder and a copy of any `.igz` test project.
-2. Open IngeTrazo → **Extensions → Open plugins folder** to locate the real user plugin directory, then close IngeTrazo.
-3. Extract the ZIP and copy its single `OpenTrace_BIM` folder to that directory, replacing the **complete** existing folder. Do not mix Python files from older versions.
-4. Verify the path is `.../ingetrazo/plugins/OpenTrace_BIM/__init__.py` (no nested duplicate folder).
-5. Restart IngeTrazo and test using a **disposable** project before opening work files.
+1. Feche o IngeTrazo.
+2. Abra a pasta de plugins (no Windows, normalmente `%APPDATA%\ingetrazo\plugins\`).
+3. Faça uma cópia de segurança da pasta `OpenTrace_BIM` que já existir.
+4. Extraia este ZIP **mantendo a pasta `OpenTrace_BIM`** diretamente dentro de `plugins`.
+5. Abra novamente o IngeTrazo e confirme que o plugin informa `0.44.0` na tela Home.
 
-**Important:** This ZIP does not include `INSTALL_OPENTRACE_BIM.bat` or `INSTALL_OPENTRACE_BIM.py`. The one-click instructions in earlier historical packages therefore do not apply. Do not place backup directories named `OpenTrace_BIM_backup_*` inside IngeTrazo's scanned `plugins` folder; use a directory outside it.
+**Não copie apenas `updater.py`; o pacote é uma extensão completa.** Não renomeie `OpenTrace_BIM`, pois a verificação da atualização exige o nome correto.
 
-In v0.42.2 and later, the updater directly checks the official OpenTrace BIM GitHub Releases feed. Users on v0.42.0–0.42.1 must install this fixed release manually because the Home update controls in those versions were disabled. The v0.12.9 updater uses the external IngeTrazo catalogue.
+## Atualização independente
+
+Na aba **Home**, pressione **Check for updates**. A partir da v0.44.0, a busca é feita em
+`https://api.github.com/repos/lelopes05/opentrace-bim/releases?per_page=30`;
+não há consulta ao catálogo de extensões do IngeTrazo. O botão apenas consulta;
+o arquivo ZIP só é baixado e instalado após confirmação do usuário.
+O atualizador confere versão, nome do pacote, SHA-256 oficial do asset,
+segurança dos caminhos do ZIP e compilação sintática dos arquivos Python.
+Reinicie o IngeTrazo após a instalação.
+
+A caixa **Automatically check for updates** é opt-in. Quando marcada, faz uma verificação na abertura; não baixa nem instala sem autorização.
+
+## Importante para as instalações antigas
+
+- **v0.12.9:** o botão que já está instalado foi programado para consultar `ingelibre/ingetrazo-extensions/main/catalog.json`. Nenhum pacote novo consegue mudar esse código remotamente. Para aparecer a v0.44.0 naquele botão, a equipe do catálogo precisa atualizar sua entrada de `opentrace_bim`; alternativa: instalar este ZIP uma vez manualmente.
+- **v0.42.0 e v0.42.1:** vieram com o botão desativado. Instale este ZIP uma vez manualmente.
+- **v0.42.2:** já consulta GitHub, mas só encontrará a v0.44.0 **após a v0.44.0 ter sua Release e asset publicados**.
+- **v0.44.0:** pronto para consultar Releases futuras sem intervenção do catálogo do IngeTrazo.
+
+## Status de validação
+
+Os testes locais verificaram sintaxe, integridade e operação do atualizador em simulação Python. A interface gráfica e a aplicação do update **ainda exigem teste real no IngeTrazo Windows**. O ZIP local **não foi publicado no GitHub**.

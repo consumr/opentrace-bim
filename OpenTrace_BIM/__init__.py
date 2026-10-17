@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Parametric architecture tools for IngeTrazo 0.5.7+ — profiled walls and hosted openings.
 
-Development draft: implementation only; runtime validation is pending.
+OpenTrace BIM parametric modelling extension.
 Keep this package's directory name stable: it identifies the extension.
 """
 
-__version__ = "0.42.2"
+__version__ = "0.44.0"
 
 
 def _setup_bundled_layer_combinations(app):

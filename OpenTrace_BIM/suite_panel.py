@@ -80,7 +80,7 @@ class ArchitectureSuitePanel:
         header.setObjectName("opentrace_sidebar_header")
         h=QHBoxLayout(header)
         h.setContentsMargins(9,6,8,6);h.setSpacing(6)
-        brand=QLabel("OpenTrace BIM · EXPERIMENTAL",header)
+        brand=QLabel("OpenTrace BIM",header)
         brand.setObjectName("opentrace_sidebar_brand")
         self.sidebar_brand = brand
         h.addWidget(brand);h.addStretch(1)
@@ -320,6 +320,7 @@ class ArchitectureSuitePanel:
         # Do not contact the network until a manual click or opt-in startup check.
         from .updater import UpdateManager, auto_check_enabled
         self.update_manager = UpdateManager(content)
+        self.update_manager.status_changed.connect(self.update_status.setText)
         self.auto_update_check.setChecked(auto_check_enabled())
         self.auto_update_check.toggled.connect(self._auto_update_toggled)
         self.update_button.clicked.connect(
