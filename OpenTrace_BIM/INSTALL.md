@@ -1,15 +1,13 @@
-# Installing OpenTrace BIM 0.12.9
+# Installing OpenTrace BIM 0.42.0 — release candidate
 
-Close IngeTrazo before replacing the extension.
+**Host:** IngeTrazo 0.5.7+ (target; verify the installed host build). This candidate has not yet passed Windows graphical acceptance.
 
-## Automatic package installer
+1. **Close IngeTrazo** and back up your existing extension folder and a copy of any `.igz` test project.
+2. Open IngeTrazo → **Extensions → Open plugins folder** to locate the real user plugin directory, then close IngeTrazo.
+3. Extract the ZIP and copy its single `OpenTrace_BIM` folder to that directory, replacing the **complete** existing folder. Do not mix Python files from older versions.
+4. Verify the path is `.../ingetrazo/plugins/OpenTrace_BIM/__init__.py` (no nested duplicate folder).
+5. Restart IngeTrazo and test using a **disposable** project before opening work files.
 
-Extract the INSTALLER ZIP, keep `INSTALL_OPENTRACE_BIM.py` beside the `OpenTrace_BIM` folder, and run the installer with Python 3. Previous installations are backed up outside the scanned plugin directory under `ingetrazo/opentrace_backups`.
+**Important:** This candidate ZIP does not include `INSTALL_OPENTRACE_BIM.bat` or `INSTALL_OPENTRACE_BIM.py`. The one-click instructions in earlier historical packages therefore do not apply. Do not place backup directories named `OpenTrace_BIM_backup_*` inside IngeTrazo's scanned `plugins` folder; use a directory outside it.
 
-## Manual installation
-
-Open **Extensions → Open plugins folder** in IngeTrazo, close IngeTrazo, then copy the included `OpenTrace_BIM` folder into that plugins directory. The correct final path is:
-
-`.../ingetrazo/plugins/OpenTrace_BIM/__init__.py`
-
-Do not create `OpenTrace_BIM/OpenTrace_BIM`.
+The updater is opt-in and checks a separate IngeTrazo extension catalogue. Publishing this ZIP on GitHub does **not** automatically publish a catalogue update.

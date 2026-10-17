@@ -7,13 +7,82 @@ coherent English UI, applied explicitly to OpenTrace-owned widgets only.
 from __future__ import annotations
 
 from PySide6.QtCore import QLocale
+from functools import lru_cache
+import json
+from pathlib import Path
+
+# Missing translations are recorded only in memory for the T1 audit.
+MISSING: set[tuple[str, str]] = set()
+_CATALOG_DIR = Path(__file__).resolve().parent / "i18n"
+
+
+@lru_cache(maxsize=2)
+def _catalog(lang: str) -> dict[str, str]:
+    data = json.loads((_CATALOG_DIR / f"{lang}.json").read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str)
+        for key, value in data.items()
+    ):
+        raise ValueError(f"Invalid OpenTrace translation catalog: {lang}")
+    return data
+
 
 # Portuguese is the author's working/source language.  English and Spanish are
 # explicit so the plugin can be published independently on GitHub without
 # depending on changes to the host application's translation catalogues.
-_EN = {
+_EN = {    "Montantes laterais": "Side stiles",
+    "Travessas superior/inferior": "Top/bottom rails",
+    "Montantes internos": "Internal mullions",
+    "Travessas internas": "Internal transoms",
+    "Vidro da folha": "Leaf glazing",
+    "Painéis opacos": "Opaque panels",
+    "Réguas da veneziana": "Louver slats",
+    "Composição paramétrica da folha": "Parametric leaf composition",
+    "Montantes e painéis": "Stiles and panels",
+    "Editar montantes, travessas e painéis…": "Edit stiles, rails and panels…",
+    "Editar composição da folha": "Edit door leaf design",
+    "Montantes verticais, travessas horizontais e painéis reais. A primeira linha da tabela é a parte superior da porta.": "Real vertical stiles, horizontal rails and infill panels. The first table row is the top of the door.",
+    "Colunas": "Columns",
+    "Linhas": "Rows",
+    "Largura dos montantes laterais": "Side stile width",
+    "Largura das travessas superior/inferior": "Top/bottom rail width",
+    "Largura dos montantes internos": "Internal mullion width",
+    "Largura das travessas internas": "Internal transom width",
+    "Espessura do vidro": "Glass thickness",
+    "Espessura dos painéis": "Panel thickness",
+    "Vidro": "Glass",
+    "Painel sólido": "Solid panel",
+    "Veneziana": "Louver",
+    "Vazio": "Open",
+    "Composição da folha": "Leaf composition",
+    "{0} colunas × {1} linhas · {2} painéis configuráveis": "{0} columns × {1} rows · {2} editable panels",
+    "Folha atual sem grade. Edite para criar montantes, travessas, vidro, painéis sólidos ou venezianas.": "Current leaf has no grid. Edit to add stiles, rails, glass, solid panels or louvers.",
     "Arquitetura": "Architecture",
     "Ferramentas arquitetônicas": "Architecture tools",
+    "Geometria": "Geometry",
+    "Quadrada": "Square",
+    "Livre": "Free",
+    "Âncora": "Anchor",
+    "Âncora esquerda": "Left anchor",
+    "Âncora central": "Center anchor",
+    "Âncora direita": "Right anchor",
+    "Reta: início e fim": "Straight: start and end",
+    "Retângulo por diagonal": "Rectangle by diagonal",
+    "Retângulo por base e largura": "Rectangle by base and width",
+    "Arco normal": "Normal arc",
+    "Arco pelo centro": "Arc by center",
+    "Arco por 3 pontos": "Arc by 3 points",
+    "OpenTrace BIM · Ferramentas": "OpenTrace BIM · Tools",
+    "Expandir a fileira de ferramentas": "Expand the tool row",
+    "Recolher a fileira de ferramentas": "Collapse the tool row",
+    "Perfil Complexo…": "Complex Profile…",
+    "Abertura": "Opening",
+    "Porta": "Door",
+    "Janela": "Window",
+    "Vãos": "Openings",
+    "Abertura na parede: passe sobre a parede e clique.": "Opening in a wall: hover over the wall and click.",
+    "Porta: passe sobre a parede e clique.": "Door: hover over the wall and click.",
+    "Janela: passe sobre a parede e clique.": "Window: hover over the wall and click.",
     "Parede": "Wall",
     "Parede paramétrica": "Parametric wall",
     "Parede curva": "Curved wall",
@@ -173,9 +242,92 @@ _EN = {
     "Nenhum perfil complexo disponível. Volte para Seção simples para criar/editar a geometria.": "No complex profile is available. Return to Simple section to create/edit geometry.",
 }
 
-_ES = {
+_ES = {    "Montantes laterais": "Montantes laterales",
+    "Travessas superior/inferior": "Travesaños superior/inferior",
+    "Montantes internos": "Montantes interiores",
+    "Travessas internas": "Travesaños interiores",
+    "Vidro da folha": "Vidrio de la hoja",
+    "Painéis opacos": "Paneles opacos",
+    "Réguas da veneziana": "Lamas de celosía",
+    "Composição paramétrica da folha": "Composición paramétrica de la hoja",
+    "Montantes e painéis": "Montantes y paneles",
+    "Editar montantes, travessas e painéis…": "Editar montantes, travesaños y paneles…",
+    "Editar composição da folha": "Editar composición de la hoja",
+    "Montantes verticais, travessas horizontais e painéis reais. A primeira linha da tabela é a parte superior da porta.": "Montantes verticales, travesaños horizontales y paneles reales. La primera fila de la tabla corresponde a la parte superior de la puerta.",
+    "Colunas": "Columnas",
+    "Linhas": "Filas",
+    "Largura dos montantes laterais": "Anchura de montantes laterales",
+    "Largura das travessas superior/inferior": "Anchura de travesaños superior/inferior",
+    "Largura dos montantes internos": "Anchura de montantes interiores",
+    "Largura das travessas internas": "Anchura de travesaños interiores",
+    "Espessura do vidro": "Espesor del vidrio",
+    "Espessura dos painéis": "Espesor de los paneles",
+    "Vidro": "Vidrio",
+    "Painel sólido": "Panel macizo",
+    "Veneziana": "Celosía",
+    "Vazio": "Hueco",
+    "Composição da folha": "Composición de la hoja",
+    "{0} colunas × {1} linhas · {2} painéis configuráveis": "{0} columnas × {1} filas · {2} paneles configurables",
+    "Folha atual sem grade. Edite para criar montantes, travessas, vidro, painéis sólidos ou venezianas.": "La hoja actual no tiene retícula. Edite para añadir montantes, travesaños, vidrio, paneles macizos o celosías.",
+    "Configurações": "Configuración",
+    "Projeto e organização": "Proyecto y organización",
+    "Ative a ferramenta na fileira do topo.": "Active la herramienta en la fila superior.",
+    "Vão": "Hueco",
+    "Plantas": "Plantas",
+    "Vistas": "Vistas",
+    "Modelagem arquitetônica paramétrica": "Modelado arquitectónico paramétrico",
+    # Contextual options bar — group titles and derived values.
+    "Pronto para modelar": "Listo para modelar",
+    "Laje selecionada": "Losa seleccionada",
+    "Vão selecionado": "Abertura seleccionada",
+    "Abertura poligonal": "Abertura poligonal",
+    "Edição da geometria": "Edición de geometría",
+    "Vértices e arestas: paleta lateral / radial": "Vértices y aristas: panel lateral / paleta radial",
+    "Abrir editor da abertura na paleta lateral": "Abrir el editor de aberturas en el panel lateral",
+    "Inverter giro da porta": "Invertir el giro de la puerta",
+    "Excluir abertura selecionada": "Eliminar la abertura seleccionada",
+    "Esquerdo": "Izquierdo",
+    "Centro": "Centro",
+    "Direito": "Derecho",
+    "Tipo": "Tipo",
+    "Medidas": "Medidas",
+    "Base": "Base",
+    "Topo": "Superior",
+    "Composta": "Compuesta",
+    "Relativa ao nível": "Relativa al nivel",
+    "Cota absoluta": "Cota absoluta",
+    "Pilar afunilado: o fim se edita na paleta": "Pilar ahusado: edite el extremo en el panel lateral",
+    "Medida no início do pilar": "Dimensión al inicio del pilar",
+    "Viga inclinada: edite na paleta": "Viga inclinada: edite en el panel lateral",
+    "Cota do topo no início da viga": "Cota superior al inicio de la viga",
+    "Calculado: Base + Altura": "Calculado: Base + Altura",
+    "Posição": "Posición",
     "Arquitetura": "Arquitectura",
     "Ferramentas arquitetônicas": "Herramientas de arquitectura",
+    "Geometria": "Geometría",
+    "Quadrada": "Cuadrada",
+    "Livre": "Libre",
+    "Âncora": "Ancla",
+    "Âncora esquerda": "Ancla izquierda",
+    "Âncora central": "Ancla central",
+    "Âncora direita": "Ancla derecha",
+    "Reta: início e fim": "Recta: inicio y fin",
+    "Retângulo por diagonal": "Rectángulo por diagonal",
+    "Retângulo por base e largura": "Rectángulo por base y ancho",
+    "Arco normal": "Arco normal",
+    "Arco pelo centro": "Arco por el centro",
+    "Arco por 3 pontos": "Arco por 3 puntos",
+    "OpenTrace BIM · Ferramentas": "OpenTrace BIM · Herramientas",
+    "Expandir a fileira de ferramentas": "Expandir la fila de herramientas",
+    "Recolher a fileira de ferramentas": "Contraer la fila de herramientas",
+    "Perfil Complexo…": "Perfil complejo…",
+    "Abertura": "Abertura",
+    "Porta": "Puerta",
+    "Janela": "Ventana",
+    "Vãos": "Vanos",
+    "Abertura na parede: passe sobre a parede e clique.": "Abertura en el muro: pase sobre el muro y haga clic.",
+    "Porta: passe sobre a parede e clique.": "Puerta: pase sobre el muro y haga clic.",
+    "Janela: passe sobre a parede e clique.": "Ventana: pase sobre el muro y haga clic.",
     "Parede": "Muro",
     "Parede paramétrica": "Muro paramétrico",
     "Parede curva": "Muro curvo",
@@ -325,6 +477,152 @@ _ES = {
     "Redimensionar a barra flutuante.": "Redimensionar la barra flotante.",
     "Viga horizontal paramétrica por dois pontos.": "Viga paramétrica horizontal por dos puntos.",
     "Clique no início e no fim da viga.": "Haga clic en el inicio y el final de la viga.",
+    "Clique no início da parede. Esc cancela; espaço sai.": "Haga clic en el inicio del muro. Esc cancela; Espacio sale.",
+    "Clique no fim da parede ou digite o comprimento e confirme com Enter.": "Haga clic en el final del muro o escriba la longitud y pulse Intro.",
+    "Aponte a direção e digite o comprimento; Enter confirma.": "Indique la dirección y escriba la longitud; Intro confirma.",
+    "Parede criada. Clique no início de outra; espaço sai.": "Muro creado. Haga clic para iniciar otro; Espacio sale.",
+    "Trecho cancelado. Clique para recomeçar; espaço sai.": "Tramo cancelado. Haga clic para reiniciar; Espacio sale.",
+    "Clique no primeiro canto do retângulo; depois marque o canto oposto.": "Haga clic en la primera esquina del rectángulo y luego en la opuesta.",
+    "Clique no canto oposto para criar quatro paredes independentes.": "Haga clic en la esquina opuesta para crear cuatro muros independientes.",
+    "Indique o canto oposto com o mouse; a medida digitada não vale neste modo.": "Señale la esquina opuesta con el ratón; aquí no se usan medidas escritas.",
+    "Bloco criado. Clique no primeiro canto do próximo retângulo; espaço sai.": "Bloque creado. Haga clic en la primera esquina del siguiente rectángulo; Espacio sale.",
+    "Clique no primeiro ponto da base; depois no ponto final.": "Haga clic en el primer punto de la base y luego en el final.",
+    "Clique do lado desejado para fixar a profundidade, ou digite e confirme.": "Haga clic en el lado deseado para definir la profundidad, o escríbala y confirme.",
+    "Aponte o lado da base; clique ou digite a profundidade e pressione Enter.": "Señale un lado de la base; haga clic o escriba la profundidad y pulse Intro.",
+    "Bloco criado. Clique para começar outro com a mesma geometria.": "Bloque creado. Haga clic para crear otro con la misma geometría.",
+    "Clique no primeiro ponto do arco escolhido na barra.": "Haga clic en el primer punto del arco elegido en la barra.",
+    "Clique no próximo ponto do arco escolhido na barra.": "Haga clic en el siguiente punto del arco elegido en la barra.",
+    "Mova o mouse para definir a flecha; clique ou digite a medida e confirme.": "Mueva el ratón para definir la flecha; haga clic o escriba la medida y confirme.",
+    "Digite a flecha do arco e pressione Enter, após definir os dois extremos.": "Escriba la flecha del arco y pulse Intro después de definir los extremos.",
+    "Parede curva criada. Clique para começar outra; espaço sai.": "Muro curvo creado. Haga clic para iniciar otro; Espacio sale.",
+    "Clique no centro do arco; depois marque o início.": "Haga clic en el centro del arco y luego marque el inicio.",
+    "Clique na direção final do arco; o raio vem do centro ao ponto inicial.": "Haga clic hacia el final del arco; el radio va del centro al punto inicial.",
+    "Neste método, indique o fim do arco com o mouse.": "En este método, indique el final del arco con el ratón.",
+    "Clique no início do arco; depois escolha o ponto intermediário.": "Haga clic en el inicio del arco y luego elija el punto intermedio.",
+    "Clique no terceiro ponto, que será o fim da parede curva.": "Haga clic en el tercer punto, que será el final del muro curvo.",
+    "Defina o ponto final com o mouse; a flecha numérica é só do arco padrão.": "Defina el punto final con el ratón; la flecha numérica solo se usa en el arco normal.",
+    "Arco cancelado. Clique para começar outro; espaço sai.": "Arco cancelado. Haga clic para iniciar otro; Espacio sale.",
+    "Clique no primeiro canto da laje; Esc cancela; espaço sai.": "Haga clic en la primera esquina de la losa; Esc cancela; Espacio sale.",
+    "Clique no canto oposto; mude o método na barra de opções se necessário.": "Haga clic en la esquina opuesta; cambie el método en la barra si hace falta.",
+    "Laje criada. Clique para começar outra; espaço sai.": "Losa creada. Haga clic para iniciar otra; Espacio sale.",
+    "Clique no fim da base da laje.": "Haga clic en el punto final de la base de la losa.",
+    "Clique do lado desejado para definir a largura da laje.": "Haga clic en el lado deseado para definir la anchura de la losa.",
+    "Clique no próximo vértice; feche no primeiro após três pontos.": "Haga clic en el siguiente vértice; cierre en el primero tras tres puntos.",
+    "Clique no próximo vértice ou no primeiro para fechar a laje.": "Haga clic en el siguiente vértice o en el primero para cerrar la losa.",
+    "Clique no primeiro vértice para confirmar o polígono.": "Haga clic en el primer vértice para confirmar el polígono.",
+    "Laje cancelada. Clique para recomeçar; espaço sai.": "Losa cancelada. Haga clic para reiniciar; Espacio sale.",
+    "Clique no ponto de inserção; espaço sai.": "Haga clic en el punto de inserción; Espacio sale.",
+    "Pilar criado. Clique para inserir outro; espaço sai.": "Pilar creado. Haga clic para insertar otro; Espacio sale.",
+    "Clique no ponto inicial da viga; espaço sai.": "Haga clic en el punto inicial de la viga; Espacio sale.",
+    "Clique no fim da viga ou digite o comprimento e pressione Enter.": "Haga clic en el final de la viga o escriba la longitud y pulse Intro.",
+    "Viga criada. Clique para começar outra; espaço sai.": "Viga creada. Haga clic para iniciar otra; Espacio sale.",
+    "Viga cancelada. Clique para começar outra; espaço sai.": "Viga cancelada. Haga clic para iniciar otra; Espacio sale.",
+    "Passe o mouse sobre uma parede e clique para colocar a abertura.": "Pase el ratón sobre un muro y haga clic para colocar la abertura.",
+    "Abertura colocada. Clique noutro ponto para inserir outra; espaço sai.": "Abertura colocada. Haga clic en otro punto para insertar otra; Espacio sale.",
+    "Passe o mouse sobre a parede e clique para criar o vão quadrado.": "Pase el ratón sobre el muro y haga clic para crear un hueco cuadrado.",
+    "Vão quadrado criado. Clique para inserir outro; espaço sai.": "Hueco cuadrado creado. Haga clic para insertar otro; Espacio sale.",
+    "Passe o mouse sobre a parede e clique para colocar a abertura circular.": "Pase el ratón sobre el muro y haga clic para colocar la abertura circular.",
+    "Abertura circular criada. Clique para inserir outra; espaço sai.": "Abertura circular creada. Haga clic para insertar otra; Espacio sale.",
+    "Clique no primeiro vértice do vão sobre a face da parede.": "Haga clic en el primer vértice del hueco en la cara del muro.",
+    "Clique no próximo vértice; feche no primeiro quando houver pelo menos três.": "Haga clic en el siguiente vértice; cierre en el primero tras al menos tres.",
+    "Clique no primeiro vértice para fechar e criar o vão.": "Haga clic en el primer vértice para cerrar y crear el hueco.",
+    "Abertura livre criada. Clique na parede para começar outro contorno.": "Abertura libre creada. Haga clic en el muro para iniciar otro contorno.",
+    "Contorno cancelado. Clique para começar outro; espaço sai.": "Contorno cancelado. Haga clic para iniciar otro; Espacio sale.",
+    "Passe o mouse sobre uma parede e clique para inserir a porta.": "Pase el ratón sobre un muro y haga clic para insertar la puerta.",
+    "Porta colocada. Clique para inserir outra; espaço sai.": "Puerta colocada. Haga clic para insertar otra; Espacio sale.",
+    "Passe o mouse sobre uma parede e clique para inserir a janela.": "Pase el ratón sobre un muro y haga clic para insertar la ventana.",
+    "Janela colocada. Clique para inserir outra; espaço sai.": "Ventana colocada. Haga clic para insertar otra; Espacio sale.",
+    "Aponte uma parede; digite a distância desde o início e pressione Enter.": "Señale un muro; escriba la distancia desde el inicio y pulse Intro.",
+    "Clique no ponto de origem do perfil.": "Haga clic en el punto de origen del perfil.",
+    "Origem definida. Continue o perfil ou clique em Salvar Perfil.": "Origen definido. Continúe el perfil o pulse Guardar perfil.",
+    "Função ativa: clique em outra aresta ou vértice para repetir; Esc ou espaço sai.": "Función activa: haga clic en otra arista o vértice para repetir; Esc o Espacio sale.",
+    "Esc ou espaço sai; clique no vazio mantém esta função ativa.": "Esc o Espacio sale; hacer clic en el vacío mantiene activa esta función.",
+    "Clique no próximo vértice da abertura; feche no primeiro.": "Haga clic en el siguiente vértice de la abertura; cierre en el primero.",
+    "Abertura criada. Use Selecionar para editar a laje.": "Abertura creada. Use Seleccionar para editar la losa.",
+    "Abertura cancelada. Use Selecionar para escolher outra área.": "Abertura cancelada. Use Seleccionar para elegir otra zona.",
+    "Clique em outra aresta ou vértice para repetir; Esc ou espaço sai.": "Haga clic en otra arista o vértice para repetir; Esc o Espacio sale.",
+    "Clique no primeiro vértice; feche o contorno depois de três.": "Haga clic en el primer vértice; cierre el contorno tras tres.",
+    "Clique no próximo vértice da membrana.": "Haga clic en el siguiente vértice de la membrana.",
+    "Clique no próximo vértice ou no primeiro para fechar.": "Haga clic en el siguiente vértice o en el primero para cerrar.",
+    "Clique no primeiro canto do retângulo de membrana.": "Haga clic en la primera esquina del rectángulo de membrana.",
+    "Clique no canto oposto para confirmar o retângulo.": "Haga clic en la esquina opuesta para confirmar el rectángulo.",
+    "Clique no centro da elipse.": "Haga clic en el centro de la elipse.",
+    "Clique num canto da caixa envolvente para confirmar a elipse.": "Haga clic en una esquina de la caja delimitadora para confirmar la elipse.",
+    "Membrana criada. Clique para começar outra; espaço sai.": "Membrana creada. Haga clic para iniciar otra; Espacio sale.",
+    "Desenho cancelado. Clique para recomeçar; espaço sai.": "Dibujo cancelado. Haga clic para reiniciar; Espacio sale.",
+    "Clique num vértice, numa aresta ou sobre a pele para abrir a paleta.": "Haga clic en un vértice, arista o superficie para abrir la paleta.",
+    "Membrana atualizada. Clique no próximo controle para continuar.": "Membrana actualizada. Haga clic en el siguiente control para continuar.",
+    "Clique no ponto inicial do arco, mantendo o centro marcado.": "Haga clic en el punto inicial del arco, manteniendo marcado el centro.",
+    "Clique no ponto intermediário por onde o arco passará.": "Haga clic en el punto intermedio por el que pasará el arco.",
+    "Clique no canto oposto para concluir o retângulo.": "Haga clic en la esquina opuesta para completar el rectángulo.",
+    "Clique no fim da base ou digite o comprimento e confirme com Enter.": "Haga clic en el final de la base o escriba la longitud y pulse Intro.",
+    "Clique nos vértices da abertura e feche no primeiro.": "Haga clic en los vértices de la abertura y cierre en el primero.",
+    "Mova a aresta do vão e clique para confirmar.": "Mueva la arista del hueco y haga clic para confirmar.",
+    "Puxe a aresta para extrudar e clique para confirmar.": "Tire de la arista para extruir y haga clic para confirmar.",
+    "Clique na aresta para inserir o novo vértice.": "Haga clic en la arista para insertar el nuevo vértice.",
+    "Mova a flecha da aresta e clique para confirmar.": "Mueva la flecha de la arista y haga clic para confirmar.",
+    "Mova o vértice e clique; aproxime-o do vizinho para unir.": "Mueva el vértice y haga clic; acérquelo a uno vecino para unirlos.",
+    "Mova para escolher o chanfro e clique.": "Mueva para elegir el chaflán y haga clic.",
+    "Mova para definir o raio do arredondamento e clique.": "Mueva para definir el radio de redondeo y haga clic.",
+    "Mova para fora ou para dentro e clique; também pode digitar a distância.": "Mueva hacia fuera o dentro y haga clic; también puede escribir la distancia.",
+    "Mova o vão na face da parede e clique ou digite o deslocamento.": "Mueva el hueco sobre la cara del muro y haga clic o escriba el desplazamiento.",
+    "Clique na posição da aresta onde inserir o vértice.": "Haga clic en la arista donde desea insertar el vértice.",
+    "Puxe a aresta da abertura e clique para extrudar.": "Tire de la arista de la abertura y haga clic para extruir.",
+    "Mova o vértice e clique; aproxime do vizinho para unir.": "Mueva el vértice y haga clic; acérquelo a uno vecino para unirlos.",
+    "Mova a flecha da aresta e clique para curvar.": "Mueva la flecha de la arista y haga clic para curvar.",
+    "Mova para definir o chanfro e clique.": "Mueva para definir el chaflán y haga clic.",
+    "Mova para definir o arredondamento e clique.": "Mueva para definir el redondeo y haga clic.",
+    "Mova para dentro/fora e clique ou digite a distância e Enter.": "Mueva hacia dentro/fuera y haga clic o escriba la distancia y pulse Intro.",
+    "Clique no ponto de referência para mover a abertura.": "Haga clic en el punto de referencia para mover la abertura.",
+    "Clique no ponto de destino da abertura.": "Haga clic en el punto de destino de la abertura.",
+    "Clique na posição desejada na aresta da laje.": "Haga clic en la posición deseada de la arista de la losa.",
+    "Mova a aresta para fora e clique para extrudar.": "Mueva la arista hacia fuera y haga clic para extruir.",
+    "Mova o vértice da laje e clique na nova posição.": "Mueva el vértice de la losa y haga clic en la nueva posición.",
+    "Mova a flecha da aresta e clique.": "Mueva la flecha de la arista y haga clic.",
+    "Mova o contorno para dentro ou fora e clique.": "Mueva el contorno hacia dentro o fuera y haga clic.",
+    "Clique no ponto de referência para mover a laje.": "Haga clic en el punto de referencia para mover la losa.",
+    "Clique no ponto de destino da laje.": "Haga clic en el punto de destino de la losa.",
+    "Clique no ponto de referência e depois na nova cota.": "Haga clic en el punto de referencia y luego en la nueva cota.",
+    "Mova o topo em Z e clique, ou digite a espessura e pressione Enter.": "Mueva la cara superior en Z y haga clic, o escriba el espesor y pulse Intro.",
+    "Clique na linha de referência onde quer inserir um vértice.": "Haga clic en la línea de referencia donde desea insertar un vértice.",
+    "Mova o novo vértice e clique; clique sem mover para só dividir a parede.": "Mueva el nuevo vértice y haga clic; haga clic sin moverlo para dividir el muro.",
+    "Arco dividido. Selecione um dos trechos para continuar.": "Arco dividido. Seleccione uno de los tramos para continuar.",
+    "Mova para definir a flecha e clique; digite 0 para voltar à reta.": "Mueva para definir la flecha y haga clic; escriba 0 para enderezar.",
+    "Mova o vértice até a posição desejada e clique; Shift trava a inferência.": "Mueva el vértice a la posición deseada y haga clic; Mayús bloquea la inferencia.",
+    "Arraste pela trajetória do arco e clique para confirmar.": "Arrastre por la trayectoria del arco y haga clic para confirmar.",
+    "Arraste o vértice pelo alinhamento e clique para prolongar ou encurtar.": "Arrastre el vértice por la alineación y haga clic para alargar o acortar.",
+    "Clique no ponto de referência da parede.": "Haga clic en el punto de referencia del muro.",
+    "Clique no ponto de destino da parede.": "Haga clic en el punto de destino del muro.",
+    "Clique no ponto de referência da parede; depois escolha a nova cota.": "Haga clic en el punto de referencia del muro y luego elija la nueva cota.",
+    "Mova o topo e clique ou digite a altura local e pressione Enter.": "Mueva la parte superior y haga clic, o escriba la altura local y pulse Intro.",
+    "Mova o topo e clique; digite a altura para preservar a inclinação.": "Mueva la parte superior y haga clic; escriba la altura para conservar la inclinación.",
+    "Mova a base e clique ou digite a cota absoluta e pressione Enter.": "Mueva la base y haga clic, o escriba la cota absoluta y pulse Intro.",
+    "Mova o topo no plano horizontal e clique; Shift trava a inferência.": "Mueva la parte superior horizontalmente y haga clic; Mayús bloquea la inferencia.",
+    "Clique no ponto de referência do pilar e depois no destino.": "Haga clic en el punto de referencia del pilar y luego en el destino.",
+    "Mova o segmento para definir a flecha e clique; digite 0 para endireitar.": "Mueva el tramo para definir la flecha y haga clic; escriba 0 para enderezar.",
+    "Mova o topo do segmento e clique para confirmar; Shift trava inferência.": "Mueva la parte superior del tramo y haga clic para confirmar; Mayús bloquea la inferencia.",
+    "Mova o vértice para a nova cota e clique.": "Mueva el vértice a la nueva cota y haga clic.",
+    "Mova o topo até a nova cota; clique ou digite e confirme.": "Mueva la parte superior hasta la nueva cota; haga clic o escriba y confirme.",
+    "Clique no ponto de referência e depois no destino da viga.": "Haga clic en el punto de referencia y luego en el destino de la viga.",
+    "Mova a flecha e clique ou digite 0 para endireitar.": "Mueva la flecha y haga clic, o escriba 0 para enderezar.",
+    "Mova a flecha vertical e clique ou digite 0 para endireitar.": "Mueva la flecha vertical y haga clic, o escriba 0 para enderezar.",
+    "Mova a ponta da viga em Z e clique; Shift trava inferência.": "Mueva el extremo de la viga en Z y haga clic; Mayús bloquea la inferencia.",
+    "Mova a ponta da viga e clique para confirmar.": "Mueva el extremo de la viga y haga clic para confirmar.",
+    "Prolongue ou encurte a viga pelo eixo e clique.": "Alargue o acorte la viga por su eje y haga clic.",
+    "Mova a ponta em Z e clique na nova altura.": "Mueva el extremo en Z y haga clic en la nueva altura.",
+    'Aplicar propriedades IFC': 'Aplicar propiedades IFC',
+    'Classe IFC': 'Clase IFC',
+    'Classificação: não definida': 'Clasificación: no definida',
+    'Código de classificação': 'Código de clasificación',
+    'Layer': 'Capa',
+    'Novos objetos': 'Objetos nuevos',
+    'Não definida': 'No definida',
+    'Objetos selecionados': 'Objetos seleccionados',
+    'Sistema de classificação': 'Sistema de clasificación',
+    'Tipo predefinido': 'Tipo predefinido',
+    'Vários layers': 'Varias capas',
+    'Biblioteca de classificações': 'Biblioteca de clasificaciones',
+    'Escolher classificação': 'Elegir clasificación',
 }
 
 
@@ -494,7 +792,6 @@ _LAYERCOMBO_EN = {
     "<b>Templates de Camadas e Combinações</b><br><span style='color:gray'>Os templates pessoais ficam disponíveis em todos os projetos deste computador e também podem ser exportados.</span>": "<b>Layer & Combination Templates</b><br><span style='color:gray'>Personal templates are available in all projects on this computer and can also be exported.</span>",
     "Aplicar ao projeto": "Apply to project",
     "Salvar projeto como template…": "Save project as template…",
-    "Excluir template pessoal": "Delete personal template",
     "Aplicar template": "Apply template",
     "O template criará as camadas que ainda não existem e substituirá a organização de pastas e as combinações deste plugin.\n\nCamadas já existentes e geometria do projeto não serão apagadas.\n\nAplicar?": "The template will create missing layers and replace this plugin's folder organisation and combinations.\n\nExisting layers and project geometry will not be deleted.\n\nApply?",
     "Salvar template pessoal": "Save personal template",
@@ -514,6 +811,17 @@ _LAYERCOMBO_EN = {
     "Excluir combinação": "Delete combination",
     "Renomear": "Rename",
     "Aplicar combinação": "Apply combination",
+    'Aplicar propriedades IFC': 'Apply IFC properties',
+    'Classificação: não definida': 'Classification: not defined',
+    'Código de classificação': 'Classification code',
+    'Layer': 'Layer',
+    'Novos objetos': 'New objects',
+    'Não definida': 'Not defined',
+    'Objetos selecionados': 'Selected objects',
+    'Tipo predefinido': 'Predefined type',
+    'Vários layers': 'Multiple layers',
+    'Biblioteca de classificações': 'Classification library',
+    'Escolher classificação': 'Choose classification',
 }
 
 _TOOL_EN = {
@@ -543,7 +851,6 @@ _TOOL_EN = {
     "A aresta é curta demais para ser estendida.": "The edge is too short to be extended.",
     "Por enquanto, só é possível unir vértices vizinhos da laje.": "For now, only neighbouring slab vertices can be joined.",
     "A aresta é curta demais para ser curvada.": "The edge is too short to be curved.",
-    "As arestas ao redor deste vértice são curtas demais.": "The edges around this vertex are too short.",
     "Escolha primeiro uma aresta da laje.": "Choose a slab edge first.",
     "Escolha primeiro um vértice da laje.": "Choose a slab vertex first.",
     "Vértice da laje movido.": "Slab vertex moved.",
@@ -553,7 +860,6 @@ _TOOL_EN = {
     "Polígono: indique os vértices e clique no primeiro para fechar.": "Polygon: indicate the vertices and click the first one to close.",
     "Retângulo por diagonal ativo. Escolha outro método na paleta se quiser.": "Rectangle by diagonal is active. Choose another method from the palette if needed.",
     "Indique a largura para qualquer lado da base.": "Indicate the width on either side of the base.",
-    "Indique um segundo ponto diferente do primeiro.": "Indicate a second point different from the first.",
     "Indique um vértice diferente do anterior.": "Indicate a vertex different from the previous one.",
     "Abertura: clique os vértices dentro da laje e finalize clicando novamente no primeiro.": "Opening: click vertices inside the slab and finish by clicking the first one again.",
     "A abertura precisa ter pelo menos três vértices.": "The opening must have at least three vertices.",
@@ -680,7 +986,6 @@ _TOOL_EN = {
     "As medidas da viga devem ser números finitos.": "Beam dimensions must be finite numbers.",
     "Forma simples de viga ainda não suportada.": "This simple beam shape is not supported yet.",
     "A inclinação da viga deve ficar entre -85° e 85°.": "Beam inclination must be between -85° and 85°.",
-    "O Perfil Complexo selecionado não contém contornos válidos.": "The selected Complex Profile contains no valid boundaries.",
     "A viga precisa ter comprimento em planta maior que 0,001 m.": "The beam plan length must be greater than 0.001 m.",
     "A curvatura horizontal é fechada demais para esta viga.": "The horizontal curvature is too tight for this beam.",
     "A curvatura vertical é fechada demais para esta viga.": "The vertical curvature is too tight for this beam.",
@@ -688,7 +993,6 @@ _TOOL_EN = {
     "Versão dos parâmetros da viga não reconhecida.": "Unrecognised beam parameter version.",
     "A estrutura da viga foi alterada. Desfaça para editar.": "The beam structure was changed. Undo to edit it.",
     "Preencha as medidas da viga com números válidos.": "Enter valid numeric beam dimensions.",
-    "Perfil complexo não encontrado. Escolha um perfil salvo ou volte para Seção simples.": "Complex profile not found. Choose a saved profile or return to Simple Section.",
     "As dimensões da viga devem ficar entre 0,001 e 10.000 m.": "Beam dimensions must be between 0.001 and 10,000 m.",
     "Desenhar uma viga paramétrica por dois pontos; inclinação e curvaturas vêm da paleta.": "Draw a parametric beam by two points; inclination and curvature come from the palette.",
     "Indique o ponto final da viga; Shift trava a inferência ativa.": "Indicate the beam end point; Shift locks the active inference.",
@@ -810,6 +1114,39 @@ _TOOL_EN = {
 }
 
 _UI_EN = {
+    "Configurações": "Settings",
+    "Projeto e organização": "Project and organization",
+    "Ative a ferramenta na fileira do topo.": "Activate the tool in the top tool row.",
+    "Vão": "Opening",
+    "Plantas": "Floor plans",
+    "Vistas": "Views",
+    "Modelagem arquitetônica paramétrica": "Parametric architectural modelling",
+    # Contextual options bar — group titles and derived values.
+    "Pronto para modelar": "Ready to model",
+    "Laje selecionada": "Selected slab",
+    "Vão selecionado": "Selected opening",
+    "Abertura poligonal": "Polygonal opening",
+    "Edição da geometria": "Geometry editing",
+    "Vértices e arestas: paleta lateral / radial": "Vertices and edges: sidebar / radial palette",
+    "Abrir editor da abertura na paleta lateral": "Open the opening editor in the sidebar",
+    "Inverter giro da porta": "Reverse door swing",
+    "Excluir abertura selecionada": "Delete selected opening",
+    "Esquerdo": "Left",
+    "Centro": "Center",
+    "Direito": "Right",
+    "Tipo": "Type",
+    "Medidas": "Dimensions",
+    "Base": "Base",
+    "Topo": "Top",
+    "Composta": "Composite",
+    "Relativa ao nível": "Relative to level",
+    "Cota absoluta": "Absolute elevation",
+    "Pilar afunilado: o fim se edita na paleta": "Tapered column: edit the end in the sidebar",
+    "Medida no início do pilar": "Dimension at column start",
+    "Viga inclinada: edite na paleta": "Sloped beam: edit in the sidebar",
+    "Cota do topo no início da viga": "Top elevation at beam start",
+    "Calculado: Base + Altura": "Calculated: Base + Height",
+    "Posição": "Position",
     # Wall panel / wall editing
     "Usa os níveis criados pela extensão Níveis. Cota livre mantém uma cota absoluta independente.": "Uses the levels created by the Levels extension. Free elevation keeps an independent absolute elevation.",
     "Livre mantém uma altura independente. Ao escolher um nível, o topo da parede acompanha esse nível mais o offset do topo.": "Free keeps an independent height. When a level is selected, the wall top follows that level plus the top offset.",
@@ -896,7 +1233,6 @@ _UI_EN = {
     "Vértice inserido; o pilar agora possui mais um segmento.": "Vertex inserted; the column now has one more segment.",
     "Escolha um Perfil Complexo antes de aplicar.": "Choose a Complex Profile before applying.",
     "Ponto de inserção do pilar": "Column insertion point",
-    "Crie ou escolha um Perfil Complexo antes de usar esta seção.": "Create or choose a Complex Profile before using this section.",
     "Clique no plano horizontal para inserir o pilar.": "Click the horizontal plane to insert the column.",
     "Escolha um Perfil Complexo antes de inserir o pilar.": "Choose a Complex Profile before inserting the column.",
     "Volte ao modelo para inserir pilares.": "Return to the model to insert columns.",
@@ -1093,6 +1429,138 @@ _UI_EN = {
     "Não foi": "Could not",
     "Há um": "There is a",
     "Contorno": "Boundary",
+    "Clique no início da parede. Esc cancela; espaço sai.": "Click the wall start point. Esc cancels; Space exits.",
+    "Clique no fim da parede ou digite o comprimento e confirme com Enter.": "Click the wall end point, or enter the length and press Enter.",
+    "Aponte a direção e digite o comprimento; Enter confirma.": "Point in a direction and type the length; Enter confirms.",
+    "Parede criada. Clique no início de outra; espaço sai.": "Wall created. Click to start another; Space exits.",
+    "Trecho cancelado. Clique para recomeçar; espaço sai.": "Segment cancelled. Click to restart; Space exits.",
+    "Clique no primeiro canto do retângulo; depois marque o canto oposto.": "Click the first rectangle corner, then its opposite corner.",
+    "Clique no canto oposto para criar quatro paredes independentes.": "Click the opposite corner to create four independent walls.",
+    "Indique o canto oposto com o mouse; a medida digitada não vale neste modo.": "Point to the opposite corner with the mouse; typed dimensions are not used in this mode.",
+    "Bloco criado. Clique no primeiro canto do próximo retângulo; espaço sai.": "Block created. Click the first corner of the next rectangle; Space exits.",
+    "Clique no primeiro ponto da base; depois no ponto final.": "Click the first point of the base, then its end point.",
+    "Clique do lado desejado para fixar a profundidade, ou digite e confirme.": "Click on the desired side to set the depth, or type it and confirm.",
+    "Aponte o lado da base; clique ou digite a profundidade e pressione Enter.": "Point to a side of the base; click or enter the depth and press Enter.",
+    "Bloco criado. Clique para começar outro com a mesma geometria.": "Block created. Click to start another with the same geometry.",
+    "Clique no primeiro ponto do arco escolhido na barra.": "Click the first point of the arc selected in the options bar.",
+    "Clique no próximo ponto do arco escolhido na barra.": "Click the next point of the arc selected in the options bar.",
+    "Mova o mouse para definir a flecha; clique ou digite a medida e confirme.": "Move the mouse to set the bulge; click or type its size and confirm.",
+    "Digite a flecha do arco e pressione Enter, após definir os dois extremos.": "Type the arc bulge and press Enter after defining both endpoints.",
+    "Parede curva criada. Clique para começar outra; espaço sai.": "Curved wall created. Click to start another; Space exits.",
+    "Clique no centro do arco; depois marque o início.": "Click the arc centre, then mark the starting point.",
+    "Clique na direção final do arco; o raio vem do centro ao ponto inicial.": "Click towards the arc end; the radius runs from the centre to the start point.",
+    "Neste método, indique o fim do arco com o mouse.": "In this method, use the mouse to set the end of the arc.",
+    "Clique no início do arco; depois escolha o ponto intermediário.": "Click the arc start, then choose the intermediate point.",
+    "Clique no terceiro ponto, que será o fim da parede curva.": "Click the third point to set the end of the curved wall.",
+    "Defina o ponto final com o mouse; a flecha numérica é só do arco padrão.": "Set the end point with the mouse; numeric bulge is only for the standard arc.",
+    "Arco cancelado. Clique para começar outro; espaço sai.": "Arc cancelled. Click to start another; Space exits.",
+    "Clique no primeiro canto da laje; Esc cancela; espaço sai.": "Click the first slab corner; Esc cancels; Space exits.",
+    "Clique no canto oposto; mude o método na barra de opções se necessário.": "Click the opposite corner; change the method in the options bar if needed.",
+    "Laje criada. Clique para começar outra; espaço sai.": "Slab created. Click to start another; Space exits.",
+    "Clique no fim da base da laje.": "Click the end point of the slab base.",
+    "Clique do lado desejado para definir a largura da laje.": "Click on the desired side to set the slab width.",
+    "Clique no próximo vértice; feche no primeiro após três pontos.": "Click the next vertex; close at the first after three points.",
+    "Clique no próximo vértice ou no primeiro para fechar a laje.": "Click the next vertex or the first to close the slab.",
+    "Clique no primeiro vértice para confirmar o polígono.": "Click the first vertex to confirm the polygon.",
+    "Laje cancelada. Clique para recomeçar; espaço sai.": "Slab cancelled. Click to restart; Space exits.",
+    "Clique no ponto de inserção; espaço sai.": "Click the insertion point; Space exits.",
+    "Pilar criado. Clique para inserir outro; espaço sai.": "Column created. Click to insert another; Space exits.",
+    "Clique no ponto inicial da viga; espaço sai.": "Click the beam start point; Space exits.",
+    "Clique no fim da viga ou digite o comprimento e pressione Enter.": "Click the beam end or type the length and press Enter.",
+    "Viga criada. Clique para começar outra; espaço sai.": "Beam created. Click to start another; Space exits.",
+    "Viga cancelada. Clique para começar outra; espaço sai.": "Beam cancelled. Click to start another; Space exits.",
+    "Passe o mouse sobre uma parede e clique para colocar a abertura.": "Hover over a wall and click to place the opening.",
+    "Abertura colocada. Clique noutro ponto para inserir outra; espaço sai.": "Opening placed. Click elsewhere to insert another; Space exits.",
+    "Passe o mouse sobre a parede e clique para criar o vão quadrado.": "Hover over the wall and click to make a square opening.",
+    "Vão quadrado criado. Clique para inserir outro; espaço sai.": "Square opening created. Click to insert another; Space exits.",
+    "Passe o mouse sobre a parede e clique para colocar a abertura circular.": "Hover over the wall and click to place a circular opening.",
+    "Abertura circular criada. Clique para inserir outra; espaço sai.": "Circular opening created. Click to insert another; Space exits.",
+    "Clique no primeiro vértice do vão sobre a face da parede.": "Click the first opening vertex on the wall face.",
+    "Clique no próximo vértice; feche no primeiro quando houver pelo menos três.": "Click the next vertex; close at the first once there are at least three.",
+    "Clique no primeiro vértice para fechar e criar o vão.": "Click the first vertex to close and create the opening.",
+    "Abertura livre criada. Clique na parede para começar outro contorno.": "Free opening created. Click the wall to begin another outline.",
+    "Contorno cancelado. Clique para começar outro; espaço sai.": "Outline cancelled. Click to start another; Space exits.",
+    "Passe o mouse sobre uma parede e clique para inserir a porta.": "Hover over a wall and click to insert the door.",
+    "Porta colocada. Clique para inserir outra; espaço sai.": "Door placed. Click to insert another; Space exits.",
+    "Passe o mouse sobre uma parede e clique para inserir a janela.": "Hover over a wall and click to insert the window.",
+    "Janela colocada. Clique para inserir outra; espaço sai.": "Window placed. Click to insert another; Space exits.",
+    "Aponte uma parede; digite a distância desde o início e pressione Enter.": "Point at a wall; type the distance from its start and press Enter.",
+    "Origem definida. Continue o perfil ou clique em Salvar Perfil.": "Origin set. Continue the profile or click Save Profile.",
+    "Função ativa: clique em outra aresta ou vértice para repetir; Esc ou espaço sai.": "Function active: click another edge or vertex to repeat; Esc or Space exits.",
+    "Esc ou espaço sai; clique no vazio mantém esta função ativa.": "Esc or Space exits; clicking empty space keeps this function active.",
+    "Clique no próximo vértice da abertura; feche no primeiro.": "Click the next opening vertex; close at the first.",
+    "Abertura criada. Use Selecionar para editar a laje.": "Opening created. Use Select to edit the slab.",
+    "Abertura cancelada. Use Selecionar para escolher outra área.": "Opening cancelled. Use Select to choose another area.",
+    "Clique em outra aresta ou vértice para repetir; Esc ou espaço sai.": "Click another edge or vertex to repeat; Esc or Space exits.",
+    "Clique no primeiro vértice; feche o contorno depois de três.": "Click the first vertex; close the outline after three.",
+    "Clique no próximo vértice da membrana.": "Click the next membrane vertex.",
+    "Clique no próximo vértice ou no primeiro para fechar.": "Click the next vertex or the first to close.",
+    "Clique no primeiro canto do retângulo de membrana.": "Click the first corner of the membrane rectangle.",
+    "Clique no canto oposto para confirmar o retângulo.": "Click the opposite corner to confirm the rectangle.",
+    "Clique no centro da elipse.": "Click the centre of the ellipse.",
+    "Clique num canto da caixa envolvente para confirmar a elipse.": "Click a corner of the bounding box to confirm the ellipse.",
+    "Membrana criada. Clique para começar outra; espaço sai.": "Membrane created. Click to start another; Space exits.",
+    "Desenho cancelado. Clique para recomeçar; espaço sai.": "Drawing cancelled. Click to restart; Space exits.",
+    "Clique num vértice, numa aresta ou sobre a pele para abrir a paleta.": "Click a vertex, edge or skin to open the palette.",
+    "Membrana atualizada. Clique no próximo controle para continuar.": "Membrane updated. Click the next control to continue.",
+    "Clique no ponto inicial do arco, mantendo o centro marcado.": "Click the starting point of the arc, keeping the centre marked.",
+    "Clique no ponto intermediário por onde o arco passará.": "Click the intermediate point through which the arc passes.",
+    "Clique no canto oposto para concluir o retângulo.": "Click the opposite corner to complete the rectangle.",
+    "Clique no fim da base ou digite o comprimento e confirme com Enter.": "Click the end of the base or type its length and press Enter.",
+    "Clique nos vértices da abertura e feche no primeiro.": "Click the opening vertices and close at the first.",
+    "Mova a aresta do vão e clique para confirmar.": "Move the opening edge and click to confirm.",
+    "Puxe a aresta para extrudar e clique para confirmar.": "Pull the edge to extrude, then click to confirm.",
+    "Clique na aresta para inserir o novo vértice.": "Click the edge to insert the new vertex.",
+    "Mova a flecha da aresta e clique para confirmar.": "Move the edge bulge and click to confirm.",
+    "Mova o vértice e clique; aproxime-o do vizinho para unir.": "Move the vertex and click; bring it close to a neighbour to merge.",
+    "Mova para escolher o chanfro e clique.": "Move to choose the chamfer and click.",
+    "Mova para definir o raio do arredondamento e clique.": "Move to set the corner radius and click.",
+    "Mova para fora ou para dentro e clique; também pode digitar a distância.": "Move outward or inward and click; you can also type the distance.",
+    "Mova o vão na face da parede e clique ou digite o deslocamento.": "Move the opening along the wall face and click or type the offset.",
+    "Clique na posição da aresta onde inserir o vértice.": "Click the edge position where the vertex should be inserted.",
+    "Puxe a aresta da abertura e clique para extrudar.": "Pull the opening edge and click to extrude.",
+    "Mova o vértice e clique; aproxime do vizinho para unir.": "Move the vertex and click; bring it close to a neighbour to merge.",
+    "Mova a flecha da aresta e clique para curvar.": "Move the edge bulge and click to curve it.",
+    "Mova para definir o chanfro e clique.": "Move to set the chamfer and click.",
+    "Mova para definir o arredondamento e clique.": "Move to set the roundover and click.",
+    "Mova para dentro/fora e clique ou digite a distância e Enter.": "Move inward/outward and click or enter the distance and press Enter.",
+    "Clique no ponto de referência para mover a abertura.": "Click the reference point to move the opening.",
+    "Clique no ponto de destino da abertura.": "Click the destination point of the opening.",
+    "Clique na posição desejada na aresta da laje.": "Click the desired position on the slab edge.",
+    "Mova a aresta para fora e clique para extrudar.": "Move the edge outward and click to extrude.",
+    "Mova o vértice da laje e clique na nova posição.": "Move the slab vertex and click at the new position.",
+    "Mova a flecha da aresta e clique.": "Move the edge bulge and click.",
+    "Mova o contorno para dentro ou fora e clique.": "Move the outline inward or outward and click.",
+    "Clique no ponto de referência para mover a laje.": "Click the reference point to move the slab.",
+    "Clique no ponto de destino da laje.": "Click the destination point for the slab.",
+    "Clique no ponto de referência e depois na nova cota.": "Click the reference point, then the new elevation.",
+    "Mova o topo em Z e clique, ou digite a espessura e pressione Enter.": "Move the top in Z and click, or type the thickness and press Enter.",
+    "Clique na linha de referência onde quer inserir um vértice.": "Click the reference line where you want to insert a vertex.",
+    "Mova o novo vértice e clique; clique sem mover para só dividir a parede.": "Move the new vertex and click; click without moving to split the wall.",
+    "Arco dividido. Selecione um dos trechos para continuar.": "Arc split. Select one of the segments to continue.",
+    "Mova para definir a flecha e clique; digite 0 para voltar à reta.": "Move to set the bulge and click; type 0 to straighten.",
+    "Mova o vértice até a posição desejada e clique; Shift trava a inferência.": "Move the vertex to the desired position and click; Shift locks the inference.",
+    "Arraste pela trajetória do arco e clique para confirmar.": "Drag along the arc path and click to confirm.",
+    "Arraste o vértice pelo alinhamento e clique para prolongar ou encurtar.": "Drag the vertex along its alignment and click to extend or shorten.",
+    "Clique no ponto de referência da parede.": "Click the wall reference point.",
+    "Clique no ponto de destino da parede.": "Click the wall destination point.",
+    "Clique no ponto de referência da parede; depois escolha a nova cota.": "Click the wall reference point, then choose the new elevation.",
+    "Mova o topo e clique ou digite a altura local e pressione Enter.": "Move the top and click, or type the local height and press Enter.",
+    "Mova o topo e clique; digite a altura para preservar a inclinação.": "Move the top and click; type the height to preserve the slope.",
+    "Mova a base e clique ou digite a cota absoluta e pressione Enter.": "Move the base and click, or type the absolute elevation and press Enter.",
+    "Mova o topo no plano horizontal e clique; Shift trava a inferência.": "Move the top horizontally and click; Shift locks the inference.",
+    "Clique no ponto de referência do pilar e depois no destino.": "Click the column reference point and then the destination.",
+    "Mova o segmento para definir a flecha e clique; digite 0 para endireitar.": "Move the segment to set the bulge and click; type 0 to straighten.",
+    "Mova o topo do segmento e clique para confirmar; Shift trava inferência.": "Move the segment top and click to confirm; Shift locks the inference.",
+    "Mova o vértice para a nova cota e clique.": "Move the vertex to the new elevation and click.",
+    "Mova o topo até a nova cota; clique ou digite e confirme.": "Move the top to its new elevation; click or type and confirm.",
+    "Clique no ponto de referência e depois no destino da viga.": "Click the reference point and then the beam destination.",
+    "Mova a flecha e clique ou digite 0 para endireitar.": "Move the bulge and click, or type 0 to straighten.",
+    "Mova a flecha vertical e clique ou digite 0 para endireitar.": "Move the vertical bulge and click, or type 0 to straighten.",
+    "Mova a ponta da viga em Z e clique; Shift trava inferência.": "Move the beam end in Z and click; Shift locks inference.",
+    "Mova a ponta da viga e clique para confirmar.": "Move the beam end and click to confirm.",
+    "Prolongue ou encurte a viga pelo eixo e clique.": "Extend or shorten the beam along its axis and click.",
+    "Mova a ponta em Z e clique na nova altura.": "Move the end in Z and click at the new height.",
 }
 
 # Ordered phrase fragments used only when an exact catalogue entry is absent.
@@ -1286,10 +1754,359 @@ _PHRASE_EN = (
 )
 
 
+
+# Verified UI chrome glossary; custom preset names/material names are not passed here.
+_EXPERIMENTAL_EN_CHROME = {'Geometria e propriedades': 'Geometry and properties', 'Informações do Projeto': 'Project information', 'Identificação': 'Identification', 'Responsáveis': 'Responsible parties', 'Estrutura do projeto': 'Project structure', 'IFC4 (estável)': 'IFC4 (stable)', 'IFC4 · estável': 'IFC4 · stable', 'IFC4.3 ADD2 · experimental, requer validação': 'IFC4.3 ADD2 · experimental; validation required', 'IFC4.3 ADD2: subconjunto arquitetônico em testes; não equivale a certificação buildingSMART': 'IFC4.3 ADD2: architectural subset under testing; not buildingSMART certified', 'EXPERIMENTAL · Configuração inicial do projeto': 'EXPERIMENTAL · Initial project setup', '2 · Conjunto de Combinação de Layers': '2 · Layer Combination Set', '3 · Esquema e classificação BIM': '3 · BIM schema and classification', 'Padrão OpenTrace (projeto vazio)': 'Default OpenTrace (empty project)', 'Usar template de configurações .json…': 'Use settings template (.json)…', 'Nenhum arquivo original será alterado.': 'No original files will be modified.', 'Preservar layers existentes / começar vazio': 'Keep existing layers / start empty', 'Inclui layers individuais, pastas, visibilidade e combinações.': 'Includes individual layers, folders, visibility and combinations.', 'Versão IFC': 'IFC version', 'Catálogos escolhidos': 'Selected catalogues', 'Adicionar catálogo oficial/externo…': 'Add official/external catalogue…', 'Instalar Uniclass ou ABNT / gerenciar catálogos…': 'Install Uniclass or ABNT / manage catalogues…', 'Catálogo principal': 'Primary catalogue', 'Equivalências': 'Equivalences', 'Nenhum · classificação manual até ser atribuída': 'None · manually classify when needed', 'Nenhuma equivalência externa verificada': 'No verified external equivalences', 'Carregar catálogo de correspondências CSV/JSON…': 'Load equivalence catalogue (CSV/JSON)…', 'Registrar correspondência manual com evidência…': 'Record a manual crosswalk with evidence…', 'Consultar correspondências entre tabelas (não códigos)…': 'View table-level correspondences (not codes)…', 'Agora não': 'Not now', 'Nenhum nível cadastrado': 'No levels defined', 'nenhum nível cadastrado': 'no levels defined', 'dados indisponíveis': 'data unavailable', 'Adicionar classificação': 'Add classification', 'Sistema de classificação:': 'Classification system:', 'Novo sistema de classificação': 'New classification system', 'Template inválido': 'Invalid template', 'Arquivo .igz inválido.': 'Invalid .igz file.', 'IFC é o esquema de troca; estas tabelas são sistemas de classificação independentes. Não há equivalências automáticas por semelhança.': 'IFC is the exchange schema; these tables are independent classification systems. Similar codes are not automatically equivalent.', 'Catálogo IFC: IFC4 incorporado': 'IFC catalogue: IFC4 built-in', 'Perfil de exportação': 'Export profile', 'Migrar catálogo IFC…': 'Migrate IFC classification catalogue…', 'Gerenciar / instalar catálogos de classificação…': 'Manage / install classification catalogues…', 'Property Sets IFC + paramétricos OpenTrace': 'IFC Property Sets + OpenTrace parametrics', 'Materiais e composições por IfcMaterialLayerSet': 'Materials and assemblies via IfcMaterialLayerSet', 'Aberturas como IfcOpeningElement + relação de vazio': 'Openings as IfcOpeningElement + void relations', 'Quantidades IFC (Qto_*) + quantidades preservadas de importação': 'IFC quantities (Qto_*) + imported quantities', 'Aparências IFC de materiais (cor / transparência)': 'IFC material appearances (color / transparency)', 'Round-trip OpenTrace paramétrico dentro do IFC': 'OpenTrace parametric round-trip within IFC', 'RepresentationMap para instâncias/componentes repetidos': 'RepresentationMap for repeated instances/components', 'BIM avançado · Psets · bibliotecas · relações · georreferenciamento…': 'Advanced BIM · Psets · libraries · relationships · georeferencing…', 'Classe IFC': 'IFC class', 'Nome IFC': 'IFC name', 'Classificação principal': 'Primary classification', 'Código principal': 'Primary code', 'Pesquisar e associar códigos · múltiplos sistemas…': 'Search and assign codes · multiple systems…', 'Propriedades IFC comuns': 'Common IFC properties', 'Externo': 'External', 'IFC4 estável / IFC4.3 experimental · exportação por perfil': 'IFC4 stable / IFC4.3 experimental · profile-based export', 'Classificações': 'Classifications', 'Selecione um único objeto BIM para classificá-lo.': 'Select one BIM object to assign a classification.', 'Catálogos não aplicados': 'Catalogues not installed', 'Não definido': 'Not defined', 'Novo': 'New', 'Existente': 'Existing', 'Demolir': 'To demolish', 'Temporário': 'Temporary', 'Sim': 'Yes', 'Não': 'No', 'Localização': 'Location', 'Descrição': 'Description', 'Escritório / Organização': 'Office / Organization', 'Edifício IFC': 'IFC building', 'Terreno IFC': 'IFC site', 'Semântica openBIM sobre a geometria paramétrica do OpenTrace.': 'openBIM semantics for OpenTrace parametric geometry.', "<b style='font-size:14pt'>Informações do Projeto</b>": "<b style='font-size:14pt'>Project information</b>", '<b>Elemento selecionado</b>': '<b>Selected element</b>', '<b>Propriedades IFC comuns</b>': '<b>Common IFC properties</b>', 'IFC4 completo (categorias internas) e classificações pessoais/importadas. A classificação IFC4 não substitui os códigos ABNT, Uniclass ou outros.': 'Complete IFC4 internal categories and personal/imported classifications. IFC4 entity classes do not replace ABNT, Uniclass, or other classification codes.', 'Aplicar propriedades IFC': 'Apply IFC properties', 'Usa os níveis criados pela extensão Níveis. Cota livre mantém uma cota absoluta independente.': 'Uses levels defined by the Levels extension. Free elevation maintains an independent absolute elevation.', 'Livre mantém uma altura independente. Ao escolher um nível, o topo da parede acompanha esse nível mais o offset do topo.': 'Free mode keeps the wall height independent. Linked mode follows the chosen level plus top offset.', 'Deslocamento do topo em relação ao nível vinculado. Ex.: -0,15 m deixa a parede 15 cm abaixo do nível.': 'Top offset relative to the linked level. Example: -0.15 m places the wall 15 cm below the level.', 'Posição da parede em relação à linha de referência. Externo é o padrão para novas paredes.': 'Wall alignment relative to the reference line. Exterior is the default for new walls.', 'Material da parede simples. Em paredes compostas cada camada pode ter seu próprio material.': 'Material for a simple wall. Composite walls can use a different material for each layer.', 'Tipo semântico IFC da parede. SOLIDWALL = parede contínua/por camadas; ELEMENTEDWALL = parede montada por elementos, painéis ou montantes.': 'Semantic IFC wall type. SOLIDWALL is continuous/layered; ELEMENTEDWALL is assembled from elements, panels, or studs.', 'Estado de construção IFC. Depois poderá dirigir filtros gráficos e combinações de documentação.': 'IFC construction status; may later control graphical filters and documentation combinations.', 'Encontrar as duas paredes: prolonga ou apara as pontas mais próximas até a interseção das linhas de referência.': 'Join the two walls by extending or trimming their closest ends to the reference-line intersection.', 'Criar parede reta com espessura, altura e alinhamento editáveis.': 'Create a straight wall with editable thickness, height and alignment.', 'Continuar o mesmo arco: move este vértice ao longo do círculo atual.': 'Continue the same arc by moving this vertex along the current circle.', 'Continuar na mesma direção: prolonga ou encurta a parede reta sem mudar seu eixo.': 'Continue in the same direction: extend or shorten the straight wall without changing its axis.', 'Comprimento do arco. Use o botão ⌒ na linha de referência para alterar a curvatura.': 'Arc length. Use the ⌒ control on the reference line to change curvature.', 'Comprimento total da trajetória. Edite os vértices para alterar uma parede segmentada.': 'Total path length. Edit the vertices to reshape a segmented wall.', 'Com Cota livre, este valor é a cota absoluta da referência. Com nível, é o deslocamento em relação ao nível.': 'With Free elevation, this value is an absolute elevation. With a level, it is an offset.', 'A linha de referência da laje fica na face inferior ou superior; não existe referência central.': 'Slab reference plane is either bottom or top; there is no center reference.', 'Material nomeado do IngeTrazo aplicado às faces da laje simples. Na laje composta cada camada pode ter seu material.': 'Named IngeTrazo material applied to a simple slab. A composite slab can have one material per layer.', 'Composição…': 'Assembly…', 'Salvar composição': 'Save assembly', 'Excluir composição': 'Delete assembly', 'Nome da composição:': 'Assembly name:', 'Composições': 'Assemblies', 'Função construtiva/BIM desta camada.': 'Construction/BIM function of this layer.', 'Material físico associado à camada.': 'Physical material associated with this layer.', 'Espessura física da camada.': 'Physical thickness of this layer.', 'Define esta camada como núcleo geométrico/de referência. Selecionar outra transfere o núcleo para ela.': 'Marks this layer as the geometric/reference core. Selecting another moves the core to it.', 'Nome livre. Ex.: Reboco externo, Bloco cerâmico, Manta.': 'Custom name, e.g. Exterior render, Clay block, Membrane.', 'Compositor de camadas': 'Layer Composer', 'Fechar': 'Close', 'Padrão': 'Default', 'Nome': 'Name', 'Função': 'Function', 'Núcleo': 'Core', 'Camada': 'Layer', 'Camadas': 'Layers', 'Parede selecionada': 'Selected wall', 'Áreas': 'Areas', 'Tipo IFC': 'IFC type', 'Fase / estado': 'Phase / status', 'EXTERIOR': 'EXTERIOR', 'INTERIOR': 'INTERIOR', 'Camadas reutilizáveis': 'Reusable layers', 'Pendente': 'Pending', 'Nenhum cadastro encontrado.': 'No entries found.'}
+
+# Scoped, explicitly reviewed English text for the visual door motor and inspector.
+_DOOR_EDITOR_EN = {'A parede hospedadora da porta não existe.': 'The door host wall no longer exists.',
+ 'Abertura da folha (%)': 'Leaf open (%)',
+ 'Abrir · uma folha': 'Single swing',
+ 'Adicionar moldura própria ao visor': 'Add inset perimeter frame',
+ 'Afastamento direito · visor → folha': 'Right offset · inset → leaf',
+ 'Afastamento esquerdo · folha → visor': 'Left offset · leaf → inset',
+ 'Afastamento inferior · folha → visor': 'Bottom offset · leaf → inset',
+ 'Afastamento superior · visor → folha': 'Top offset · inset → leaf',
+ 'Alizar face A': 'Trim side A',
+ 'Alizar face B': 'Trim side B',
+ 'Almofadada': 'Panelled',
+ 'Altura de corte': 'Rough opening height',
+ 'Altura do visor': 'Vision panel height',
+ 'Altura externa do conjunto': 'Overall unit height',
+ 'Altura externa manual': 'Manual overall height',
+ 'Altura física da folha': 'Physical leaf height',
+ 'Aplicar / Converter porta selecionada': 'Apply / Convert selected door',
+ 'Aplicar modelo/sistema à porta selecionada': 'Apply style/system to selected door',
+ 'Arco com vidro': 'Glazed arch',
+ 'Ateliê 2 × 4': 'Atelier 2 × 4',
+ 'Ativar arco superior': 'Enable arched head',
+ 'Ativar estrutura e editar larguras': 'Enable structure and edit widths',
+ 'Ative o ajuste manual acima para editar a medida externa.': 'Enable manual override above to edit the '
+                                                              'overall dimension.',
+ 'Automática': 'Automatic',
+ 'Borda da folha': 'Leaf edge',
+ 'Circular': 'Circular',
+ 'Coluna {0}, linha {1} · clique na estrutura para editar a peça': 'Column {0}, row {1} · click the frame '
+                                                                   'to edit a member',
+ 'Compositor': 'Compositor',
+ 'Compositor visual': 'Visual compositor',
+ 'Compositor visual da folha': 'Visual leaf compositor',
+ 'Compositor visual de esquadrias — OpenTrace BIM': 'Visual door/window compositor — OpenTrace BIM',
+ 'Compositor visual do caixilho': 'Visual sash compositor',
+ 'Composição': 'Assembly',
+ 'Composição da esquadria': 'Door/window composition',
+ 'Composição da folha': 'Leaf composition',
+ 'Composição válida · alterações locais até confirmar': 'Valid assembly · changes stay local until '
+                                                        'confirmed',
+ 'Construção': 'Construction',
+ 'Controle disponível somente para porta de giro.': 'Only available for swing doors.',
+ 'Conversão da porta selecionada': 'Selected door conversion',
+ 'Conversão não aplicada': 'Conversion not applied',
+ 'Converte a porta selecionada, mantendo medidas e ancoragem.': 'Converts the selected door while '
+                                                                'preserving dimensions and anchor.',
+ 'Converte sistema e folha em um único Undo; mantém posição, dimensões e IDs.': 'Converts system and leaf '
+                                                                                'in one Undo step; '
+                                                                                'preserves position, '
+                                                                                'dimensions and IDs.',
+ 'Converter porta': 'Convert door',
+ 'Correr aparente (externa)': 'Surface sliding (external)',
+ 'Correr embutida (experimental)': 'Pocket sliding (experimental)',
+ 'Correr para': 'Slide towards',
+ 'Correr · aparente': 'Surface sliding',
+ 'Correr · embutida (alojamento experimental)': 'Pocket sliding (experimental)',
+ 'Corrija as medidas: ': 'Fix the dimensions: ',
+ 'Descartar escolha': 'Discard choice',
+ 'Desligue a uniformidade correspondente e clique em um montante ou travessa na elevação 2D.': 'Disable the '
+                                                                                               'relevant '
+                                                                                               'uniformity '
+                                                                                               'setting and '
+                                                                                               'click a '
+                                                                                               'stile or '
+                                                                                               'rail in the '
+                                                                                               '2D '
+                                                                                               'elevation.',
+ 'Desligue a uniformidade correspondente e selecione um montante ou travessa.': 'Disable the relevant '
+                                                                                'uniformity setting and '
+                                                                                'select a stile or rail.',
+ 'Dimensões da esquadria': 'Door/window dimensions',
+ 'Dimensões padrão para inserir novas portas': 'Default dimensions for newly inserted doors',
+ 'Direita': 'Right',
+ 'Divisão simples atual; abra o compositor para montar a janela.': 'Current simple division; open the '
+                                                                   'compositor to edit the window.',
+ 'Diâmetro individual': 'Individual diameter',
+ 'Diâmetro · Travessas externas': 'Diameter · external rails',
+ 'Diâmetro · Travessas internas': 'Diameter · internal rails',
+ 'Dobradiça direita': 'Right hinge',
+ 'Dobradiça esquerda': 'Left hinge',
+ 'Dobradiças à direita': 'Hinges on the right',
+ 'Dobradiças à esquerda': 'Hinges on the left',
+ 'Edita imediatamente a porta selecionada.': 'Edits the selected door immediately.',
+ 'Editar caixilho, vidros e divisões…': 'Edit sash, glazing and divisions…',
+ 'Edite as peças no desenho; clique nos perfis para atribuir materiais. Tudo é aplicado somente ao confirmar.': 'Edit '
+                                                                                                                'parts '
+                                                                                                                'in '
+                                                                                                                'the '
+                                                                                                                'drawing; '
+                                                                                                                'click '
+                                                                                                                'profiles '
+                                                                                                                'to '
+                                                                                                                'assign '
+                                                                                                                'materials. '
+                                                                                                                'Changes '
+                                                                                                                'are '
+                                                                                                                'applied '
+                                                                                                                'only '
+                                                                                                                'when '
+                                                                                                                'you '
+                                                                                                                'confirm.',
+ 'Edite uma folha-modelo antes de inserir ou a porta selecionada.': 'Edit a template leaf before insertion '
+                                                                    'or the selected door.',
+ 'Elevação': 'Elevation',
+ 'Elevação 2D': '2D elevation',
+ 'Escolha o sistema e o modelo acima; clique Aplicar / Converter para modificar a porta selecionada.': 'Choose '
+                                                                                                       'the '
+                                                                                                       'system '
+                                                                                                       'and '
+                                                                                                       'style '
+                                                                                                       'above, '
+                                                                                                       'then '
+                                                                                                       'click '
+                                                                                                       'Apply '
+                                                                                                       '/ '
+                                                                                                       'Convert '
+                                                                                                       'to '
+                                                                                                       'change '
+                                                                                                       'the '
+                                                                                                       'selected '
+                                                                                                       'door.',
+ 'Escolha um perfil salvo': 'Choose a saved profile',
+ 'Espessura da folha': 'Leaf thickness',
+ 'Espessura dos painéis': 'Panel thickness',
+ 'Espessura dos vidros': 'Glass thickness',
+ 'Esquadria': 'Door/window',
+ 'Esquerda': 'Left',
+ 'Estilos editáveis': 'Editable styles',
+ 'Face de referência': 'Reference face',
+ 'Face externa da folha': 'Exterior leaf face',
+ 'Face interna da folha': 'Interior leaf face',
+ 'Favorito': 'Favourite',
+ 'Favoritos': 'Favourites',
+ 'Ferragens': 'Hardware',
+ 'Ferramenta Porta · Inserção e edição da porta selecionada': 'Door tool · insert and edit selected door',
+ 'Flecha do arco (altura)': 'Arch rise (height)',
+ 'Folga de instalação direita': 'Right installation clearance',
+ 'Folga de instalação esquerda': 'Left installation clearance',
+ 'Folga de instalação inferior': 'Bottom installation clearance',
+ 'Folga de instalação superior': 'Top installation clearance',
+ 'Folga móvel direita': 'Right operating gap',
+ 'Folga móvel esquerda': 'Left operating gap',
+ 'Folga móvel superior': 'Top operating gap',
+ 'Folha almofadada tradicional': 'Traditional panelled leaf',
+ 'Folha atual sem grade. Edite para criar montantes, travessas, vidro, painéis sólidos ou venezianas.': 'Current '
+                                                                                                        'leaf '
+                                                                                                        'has '
+                                                                                                        'no '
+                                                                                                        'grid. '
+                                                                                                        'Edit '
+                                                                                                        'to '
+                                                                                                        'add '
+                                                                                                        'stiles, '
+                                                                                                        'rails, '
+                                                                                                        'glass, '
+                                                                                                        'solid '
+                                                                                                        'panels '
+                                                                                                        'or '
+                                                                                                        'louvers.',
+ 'Folha do compositor / modelo visual': 'Compositor leaf / visual model',
+ 'Folha frisada tradicional': 'Traditional grooved leaf',
+ 'Folha lisa com visor deslocável': 'Plain leaf with movable vision panel',
+ 'Folha lisa tradicional': 'Traditional plain leaf',
+ 'Francesa 2 × 3': 'French 2 × 3',
+ 'Frisada': 'Grooved',
+ 'Giro negativo': 'Negative swing',
+ 'Giro positivo': 'Positive swing',
+ 'Incluir montantes laterais': 'Include side stiles',
+ 'Incluir travessas externas': 'Include top/bottom rails',
+ 'Instalação da porta de correr': 'Sliding door installation',
+ 'Instalação e batente': 'Installation and jamb',
+ 'Isométrica 3D': '3D isometric',
+ 'Lado da dobradiça': 'Hinge side',
+ 'Lado das dobradiças': 'Hinge side',
+ 'Largura aparente do marco': 'Visible frame width',
+ 'Largura da moldura': 'Inset frame width',
+ 'Largura de corte': 'Rough opening width',
+ 'Largura do visor': 'Vision panel width',
+ 'Largura externa do conjunto': 'Overall unit width',
+ 'Largura externa manual': 'Manual overall width',
+ 'Largura física da folha': 'Physical leaf width',
+ 'Largura individual': 'Individual width',
+ 'Largura travessas externas · ret./complexo': 'External rail width · rectangular/complex',
+ 'Largura travessas internas · ret./complexo': 'Internal rail width · rectangular/complex',
+ 'Liga largura, seção e material das travessas e montantes deste grupo. Desligue e clique em uma peça para editar individualmente.': 'Links '
+                                                                                                                                     'width, '
+                                                                                                                                     'cross-section '
+                                                                                                                                     'and '
+                                                                                                                                     'material '
+                                                                                                                                     'for '
+                                                                                                                                     'this '
+                                                                                                                                     'group '
+                                                                                                                                     'of '
+                                                                                                                                     'rails '
+                                                                                                                                     'and '
+                                                                                                                                     'stiles. '
+                                                                                                                                     'Uncheck '
+                                                                                                                                     'to '
+                                                                                                                                     'edit '
+                                                                                                                                     'an '
+                                                                                                                                     'individual '
+                                                                                                                                     'member.',
+ 'Lisa': 'Plain',
+ 'Lisa + visor móvel': 'Plain + movable vision',
+ 'Malha de montantes e travessas': 'Stile and rail grid',
+ 'Manual': 'Manual',
+ 'Marco / batente': 'Frame / jamb',
+ 'Materiais por componente': 'Materials by component',
+ 'Material da peça selecionada': 'Selected part material',
+ 'Material da peça: ': 'Part material: ',
+ 'Material uniforme · glass': 'Uniform material · glass',
+ 'Material uniforme · louvers': 'Uniform material · louvers',
+ 'Material uniforme · solid panels': 'Uniform material · solid panels',
+ 'Material uniforme · structure': 'Uniform material · structure',
+ 'Material · externas': 'Material · external members',
+ 'Material · glass': 'Material · glass',
+ 'Material · internas': 'Material · internal members',
+ 'Material · louvers': 'Material · louvers',
+ 'Material · solid panels': 'Material · solid panels',
+ 'Material · structure': 'Material · structure',
+ 'Meio vidro': 'Half glazed',
+ 'Modelo da folha': 'Leaf style',
+ 'Modelo de folha': 'Leaf style',
+ 'Modelos pré-configurados': 'Presets',
+ 'Negativo': 'Negative',
+ 'Nenhum favorito salvo para este tipo de esquadria.': 'No favourites saved for this door/window type.',
+ 'Nenhuma abertura órfã de porta foi encontrada.': 'No orphaned door openings found.',
+ 'Nenhuma porta selecionada · configure a nova inserção': 'No selected door · configure a new insertion',
+ 'No modo visor, arraste o vidro na elevação 2D ou use X/Z. Clique em qualquer travessa/montante para editar seu material.': 'In '
+                                                                                                                             'inset '
+                                                                                                                             'mode, '
+                                                                                                                             'drag '
+                                                                                                                             'the '
+                                                                                                                             'glazing '
+                                                                                                                             'in '
+                                                                                                                             'the '
+                                                                                                                             '2D '
+                                                                                                                             'elevation '
+                                                                                                                             'or '
+                                                                                                                             'use '
+                                                                                                                             'X/Z. '
+                                                                                                                             'Click '
+                                                                                                                             'any '
+                                                                                                                             'stile '
+                                                                                                                             'or '
+                                                                                                                             'rail '
+                                                                                                                             'to '
+                                                                                                                             'edit '
+                                                                                                                             'its '
+                                                                                                                             'material.',
+ 'Nome do favorito:': 'Favourite name:',
+ 'Não existem montantes/travessas internos. Aumente linhas ou colunas.': 'No internal mullions or transoms. '
+                                                                         'Increase rows or columns.',
+ 'Não foi possível abrir/aplicar o compositor:\n': 'Unable to open or apply the compositor:\n',
+ 'Padrão / sem material específico': 'Default / no specific material',
+ 'Para a direita': 'To the right',
+ 'Para a esquerda': 'To the left',
+ 'Perfil complexo da biblioteca': 'Complex profile from library',
+ 'Perfil complexo individual': 'Individual complex profile',
+ 'Perfil da biblioteca': 'Library profile',
+ 'Perfil selecionado · opções individuais': 'Selected profile · individual options',
+ 'Perfis externos uniformes · travessas e montantes': 'Uniform external profiles · rails and stiles',
+ 'Perfis internos uniformes · travessas e montantes': 'Uniform internal profiles · transoms and mullions',
+ 'Peça: ': 'Part: ',
+ 'Ponto de referência ': 'Reference point ',
+ 'Porta completa': 'Full door',
+ 'Porta de Correr': 'Sliding door',
+ 'Porta de Giro': 'Swing door',
+ 'Porta lisa': 'Plain leaf',
+ 'Porta lisa em arco': 'Arched plain leaf',
+ 'Porta selecionada · alterações de propriedades são imediatas': 'Selected door · property edits are '
+                                                                 'immediate',
+ 'Porta selecionada · propriedades abaixo aplicam imediatamente': 'Selected door · properties below apply '
+                                                                  'immediately',
+ 'Portas antigas precisam de migração explícita antes da conversão.': 'Legacy doors need explicit migration '
+                                                                      'before conversion.',
+ 'Positivo': 'Positive',
+ 'Profundidade do batente': 'Jamb depth',
+ 'Profundidade individual': 'Individual depth',
+ 'Profundidade · Travessas externas': 'Depth · external rails',
+ 'Profundidade · Travessas internas': 'Depth · internal rails',
+ 'Quantidade de folhas da janela': 'Window sash count',
+ 'Recuo da face escolhida': 'Chosen face recess',
+ 'Remove, com Undo/Redo, apenas aberturas de portas cujas folhas já não existem.': 'Remove only door '
+                                                                                   'openings with missing '
+                                                                                   'leaves, with Undo/Redo.',
+ 'Reparar aberturas órfãs de portas antigas…': 'Repair orphaned legacy door openings…',
+ 'Reparo não concluído': 'Repair not completed',
+ 'Retangular / quadrado': 'Rectangular / square',
+ 'Save esquadria': 'Save door/window',
+ 'Selecionado: ': 'Selected: ',
+ 'Selecionar perfil externo para edição individual': 'Select external member for individual editing',
+ 'Selecionar perfil interno para edição individual': 'Select internal member for individual editing',
+ 'Selecione primeiro uma porta paramétrica existente na viewport.': 'First select an existing parametric '
+                                                                    'door in the viewport.',
+ 'Selecione uma porta existente para habilitar a conversão.': 'Select an existing door to enable '
+                                                              'conversion.',
+ 'Sentido de deslizamento': 'Sliding direction',
+ 'Sentido de giro': 'Swing direction',
+ 'Seção / medidas': 'Section / dimensions',
+ 'Seção das travessas (geometria real)': 'Rail cross-sections (real geometry)',
+ 'Seção individual': 'Individual section',
+ 'Sistema de abertura': 'Opening system',
+ 'Sistema de portas': 'Door system',
+ 'Sistema, folha e sentido de abertura': 'System, leaf and opening direction',
+ 'Sobreposição da folha': 'Leaf overlap',
+ 'Somente esta peça': 'Only this part',
+ 'Tipo de composição e divisões': 'Assembly type and subdivisions',
+ 'Tipo de folha': 'Leaf type',
+ 'Tipo de folha · edição e conversão': 'Leaf type · editing and conversion',
+ 'Topo em arco circular': 'Circular arched head',
+ 'Travessas externas': 'External rails',
+ 'Travessas internas': 'Internal rails',
+ 'Três painéis': 'Three panels',
+ 'Unidades de deslocamento': 'Offset units',
+ 'Uniformidade independente da estrutura': 'Independent structure uniformity',
+ 'Valor externo manual do conjunto.': 'Manually overridden overall dimension.',
+ 'Veneziana + vidro': 'Louver + glass',
+ 'Verticais 3 × 1': 'Vertical 3 × 1',
+ 'Vidro inteiro': 'Full glass',
+ 'Visor / painel deslocável': 'Movable vision panel / infill',
+ 'Visor deslocável · selecione o vidro ou a moldura': 'Movable inset · select glazing or frame',
+ 'Visor superior': 'Upper vision panel',
+ 'Vão de porta': 'Door opening',
+ 'Vão livre': 'Open void',
+ 'Vão sem folha': 'Empty door opening',
+ 'Ângulo da folha no 3D': 'Leaf angle in 3D',
+ 'Ângulo da folha no modelo 3D; disponível para portas de giro.': '3D leaf angle; available for swing '
+                                                                  'doors.',
+ 'Ângulo em planta': 'Plan angle',
+ 'Ângulo em planta reservado para representação 2D; não altera a geometria 3D nesta versão.': 'Plan angle '
+                                                                                              'reserved for '
+                                                                                              '2D '
+                                                                                              'representation; '
+                                                                                              'it does not '
+                                                                                              'change 3D '
+                                                                                              'geometry in '
+                                                                                              'this build.',
+ '✎  Abrir compositor visual de folhas…': '✎  Open visual leaf compositor…'}
+
+
 def english(text: str) -> str:
     """Return extension-owned UI text in English, regardless of host locale."""
     if not isinstance(text, str) or not text:
         return text
+    if text in _DOOR_EDITOR_EN:
+        return _DOOR_EDITOR_EN[text]
+    if text in _EXPERIMENTAL_EN_CHROME:
+        return _EXPERIMENTAL_EN_CHROME[text]
     out = _LAYERCOMBO_EN.get(text, _TOOL_EN.get(text, _UI_EN.get(text, _EXTRA_EN.get(text, _EN.get(text, text)))))
     if out != text:
         return out
@@ -1374,26 +2191,43 @@ def englishize_widget(root) -> None:
 
 
 def translate_widget(root) -> None:
-    """Translate one OpenTrace-owned widget tree in place.
+    """Legacy T1-only fallback for English OpenTrace widget chrome.
 
-    This is deliberately an explicit, one-shot operation.  Do not install a
-    QApplication event filter here: translating on Show/Polish/LayoutRequest
-    can recursively trigger Qt layout events and made 0.12.8 unstable on
-    Windows.  Call this only after an OpenTrace panel/dialog has been built.
+    Do not translate completed widgets in Portuguese or Spanish. T2 removes
+    this function once all visible strings use t() at creation time.
     """
-    englishize_widget(root)
+    if language() == "en":
+        englishize_widget(root)
 
 
 def language() -> str:
-    # Public builds use one coherent language. Host locale is intentionally
-    # ignored until the extension owns a complete translation catalogue.
+    """English-only OpenTrace chrome in this ISOLATED experimental build.
+
+    This does not affect IngeTrazo's locale, IFC codes, or user-entered names.
+    """
     return "en"
 
 
-def t(text: str, **kw) -> str:
-    out = english(text)
+def t(text: str, *, _locale: str | None = None, **kw) -> str:
+    """Translate Portuguese source text; accept an explicit locale for pure audits."""
+    if not isinstance(text, str) or not text:
+        return text
+    lang = language() if _locale is None else _locale
+    if lang not in ("en", "es", "pt-BR"):
+        raise ValueError(f"Unsupported OpenTrace locale: {lang}")
+    if lang == "pt-BR":
+        out = text
+    else:
+        catalog = _catalog(lang)
+        if text in catalog:
+            out = catalog[text]
+        else:
+            MISSING.add((lang, text))
+            # English's legacy fallback is removed in T2.
+            out = english(text) if lang == "en" else text
     return out.format(**kw) if kw else out
 
 
 def ui_locale() -> QLocale:
-    return QLocale("en_US")
+    """Locale to use for numeric input in T2 (not applied to fields in T1)."""
+    return QLocale({"pt-BR": "pt_BR", "es": "es_ES", "en": "en_US"}[language()])

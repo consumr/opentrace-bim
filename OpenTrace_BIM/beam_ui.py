@@ -2,6 +2,7 @@
 """Beam toolbar action, side palette and graphical axis handles."""
 from __future__ import annotations
 import logging, math
+from .materials_ui import MaterialPickerCombo
 from PySide6.QtCore import QEvent,QPoint,QPointF,QRectF,QTimer,Qt
 from PySide6.QtGui import QAction,QColor,QIcon,QPainter,QPen,QPixmap,QVector3D
 from PySide6.QtWidgets import QComboBox,QFormLayout,QGridLayout,QLabel,QToolButton,QVBoxLayout,QWidget
@@ -65,7 +66,7 @@ class BeamController(QWidget):
         self.curvature=self._spin(.05,-MAX_DIM,MAX_DIM);form.addRow(t("Flecha horizontal"),self.curvature)
         self.vertical_curvature=self._spin(.05,-MAX_DIM,MAX_DIM);form.addRow(t("Flecha vertical"),self.vertical_curvature)
         self.rotation=QDoubleSpinBox();self.rotation.setLocale(ui_locale());self.rotation.setDecimals(2);self.rotation.setRange(-360,360);self.rotation.setSingleStep(5);self.rotation.setSuffix("°");self.rotation.setKeyboardTracking(False);self.rotation.valueChanged.connect(self.values_changed);form.addRow(t("Rotação"),self.rotation)
-        self.material=QComboBox();self.material.currentIndexChanged.connect(self.values_changed);form.addRow(t("Material"),self.material)
+        self.material=MaterialPickerCombo();self.material.currentIndexChanged.connect(self.values_changed);form.addRow(t("Material"),self.material)
         box=QWidget();grid=QGridLayout(box);grid.setContentsMargins(0,0,0,0);grid.setSpacing(2);self.anchor_buttons={}
         for r,row in enumerate((["tl","tc","tr"],["ml","mc","mr"],["bl","bc","br"])):
             for c,key in enumerate(row):
@@ -80,11 +81,8 @@ class BeamController(QWidget):
         self.action=QAction(beam_icon(),t("Viga paramétrica"),self.app.window);self.action.setCheckable(True);self.action.setToolTip(t("Viga paramétrica\nComprimento, largura, altura, inclinação e curvaturas horizontal/vertical."));register_tool(self.app,self.tool,self.action,key=BEAM_TOOL_KEY);self.action.triggered.connect(self.start_drawing)
         register_tool(self.app,self.move_free_tool,key=BEAM_MOVE_FREE_TOOL_KEY);register_tool(self.app,self.move_continue_tool,key=BEAM_MOVE_CONTINUE_TOOL_KEY);register_tool(self.app,self.move_vertical_tool,key=BEAM_MOVE_VERTICAL_TOOL_KEY)
         register_tool(self.app,self.move_tool,key=BEAM_MOVE_TOOL_KEY);register_tool(self.app,self.curve_tool,key=BEAM_CURVE_TOOL_KEY);register_tool(self.app,self.vertical_curve_tool,key=BEAM_VERTICAL_CURVE_TOOL_KEY);register_tool(self.app,self.incline_tool,key=BEAM_INCLINE_TOOL_KEY)
-        if self.wall_controller is not None and hasattr(self.wall_controller,"toolbar"):
-            self.wall_controller.toolbar.addAction(self.action);self.wall_controller.fit_toolbar();m=getattr(self.wall_controller,"arch_menu",None)
-            if m is not None:m.addAction(self.action)
-        else:
-            m=self.app.add_menu(t("Ferramentas arquitetônicas"));m.addAction(self.action) if m is not None else None
+        m=self.wall_controller.arch_menu if self.wall_controller is not None else self.app.add_menu(t("Ferramentas arquitetônicas"))
+        if m is not None:m.addAction(self.action)
     def _make_endpoint_palette(self):
         self.endpoint_palette=RadialPalette(self.app.window,popup=False,role="edit");row=self.endpoint_palette.row
         def add(sym,tip,slot):
@@ -253,12 +251,12 @@ class BeamController(QWidget):
             if self.defaults.get("section_type")=="complex" and not self.defaults.get("profile_ref"):raise BeamError("Escolha um Perfil Complexo antes de inserir a viga.")
             if self.app.workspace() is not None:raise BeamError("Volte ao modelo para inserir vigas.")
         except Exception as exc:self.action.setChecked(False);self.app.viewport.flash_status(t(str(exc)),6000);return
-        self.app.scene.clear_selection();activate_beam(self.app);self.schedule_refresh();self.message("Clique no início da viga.");self.app.viewport.setFocus()
+        self.app.scene.clear_selection();activate_beam(self.app);self.schedule_refresh();self.app.viewport.setFocus()
     def stop_drawing(self):activate_select(self.app);self.action.setChecked(False);self.schedule_refresh()
     def return_to_select(self):activate_select(self.app);self.schedule_refresh();self.app.viewport.setFocus()
     def message(self,text,error=False):
         shown=t(text);self.feedback.setText(shown);self.feedback.setStyleSheet("color:#b00020;" if error else "")
-        if text:self.app.viewport.flash_status(shown,8000 if error else 15000)
+        if text:self.app.viewport.flash_status(shown,15000)
     @staticmethod
     def _seg_distance(px,py,a,b):
         ax,ay=a;bx,by=b;dx,dy=bx-ax,by-ay;den=dx*dx+dy*dy

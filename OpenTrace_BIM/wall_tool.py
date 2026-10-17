@@ -12,6 +12,7 @@ from .commands import CreateWall, CreateWalls, root_edit_allowed
 from .model import (ARC_EPS, FACE_LOOPS, MIN_DIM, WallError, arc_points, build_body,
                     local_corners, make_arc_wall, make_wall, path_length, validate)
 from .snaprefs import nearest_wall_reference_endpoint
+from .step_guide import show_step, step_text
 
 
 class WallTool(AxisMagnet, Tool):
@@ -28,26 +29,50 @@ class WallTool(AxisMagnet, Tool):
     def __init__(self, controller):
         self.controller = controller
         self.mode = self.MODE_SINGLE
+        self.step_id = "wall.segment.start"
         self.start_point = None
         self.second_point = None
         self.hover_point = None
         self.scene_at_start = None
 
     def reset(self):
-        self.mode = self.MODE_SINGLE
         self.start_point = self.second_point = self.hover_point = self.scene_at_start = None
-        if hasattr(self.controller, "hide_straight_mode_palette"):
-            self.controller.hide_straight_mode_palette()
         if hasattr(self.controller, "fields"):
             self.controller.preview_length(0.0)
 
     def on_activate(self, viewport):
         self.reset()
+        self._show_start(viewport)
         self.controller.schedule_refresh()
 
     def on_deactivate(self, viewport):
         self.reset()
+        self.controller.app.window.statusBar().clearMessage()
         self.controller.schedule_refresh()
+
+    def status_clause(self):
+        # Kept for hosts newer than IngeTrazo 0.5.8.
+        return step_text(self.step_id)
+
+    def _show_start(self, viewport):
+        if self.mode == self.MODE_RECT_DIAGONAL:
+            show_step(self, viewport, "wall.rect_diag.choose")
+        elif self.mode == self.MODE_RECT_BASE_WIDTH:
+            show_step(self, viewport, "wall.rect_base.choose")
+        else:
+            show_step(self, viewport, "wall.segment.start")
+
+    def _show_second(self, viewport):
+        if self.mode == self.MODE_RECT_DIAGONAL:
+            show_step(self, viewport, "wall.rect_diag.after_first")
+        elif self.mode == self.MODE_RECT_BASE_WIDTH:
+            show_step(self, viewport, "wall.rect_base.after_first")
+        else:
+            show_step(self, viewport, "wall.segment.end")
+
+    def _warn(self, viewport, text):
+        self.controller.message(text, error=True)
+        show_step(self, viewport, self.step_id)
 
     def set_mode(self, mode):
         if mode not in (self.MODE_SINGLE, self.MODE_RECT_DIAGONAL, self.MODE_RECT_BASE_WIDTH):
@@ -57,13 +82,13 @@ class WallTool(AxisMagnet, Tool):
         # restarts only the post-first-click part of the construction.
         self.second_point = None
         self.hover_point = QVector3D(self.start_point) if self.start_point is not None else None
-        labels = {
-            self.MODE_SINGLE: "Parede reta: indique o ponto final.",
-            self.MODE_RECT_DIAGONAL: "Bloco retangular por diagonal: indique o canto oposto.",
-            self.MODE_RECT_BASE_WIDTH: "Bloco retangular por base + profundidade: indique o fim da base.",
-        }
-        self.controller.message(labels[mode])
-        self.controller.app.viewport.update()
+        viewport = self.controller.app.viewport
+        if self.start_point is None:
+            if viewport.active_tool is self.controller.draw_tool:
+                self._show_start(viewport)
+        elif viewport.active_tool is self.controller.draw_tool:
+            self._show_second(viewport)
+        viewport.update()
 
     def drag_plane(self, viewport):
         # Explicit even before the first click: face inference must not turn
@@ -121,12 +146,8 @@ class WallTool(AxisMagnet, Tool):
                 self.start_point = point
                 self.hover_point = point
                 self.scene_at_start = ctx.viewport.scene
-                self.mode = self.MODE_SINGLE
                 self.controller.preview_length(0.0)
-                if hasattr(self.controller, "show_straight_mode_palette"):
-                    self.controller.show_straight_mode_palette(ctx.screen)
-                self.controller.message(
-                    "Parede reta ativa. Escolha na radial se quiser criar um bloco de quatro paredes.")
+                self._show_second(ctx.viewport)
             elif self.mode == self.MODE_SINGLE:
                 self.commit(ctx.viewport, point)
             elif self.mode == self.MODE_RECT_DIAGONAL:
@@ -137,15 +158,13 @@ class WallTool(AxisMagnet, Tool):
                         raise WallError("Indique um segundo ponto diferente do primeiro.")
                     self.second_point = point
                     self.hover_point = point
-                    if hasattr(self.controller, "hide_straight_mode_palette"):
-                        self.controller.hide_straight_mode_palette()
-                    self.controller.message("Indique a profundidade para qualquer lado da base.")
+                    show_step(self, ctx.viewport, "wall.rect_base.width")
                 else:
                     self.commit_rectangle(
                         ctx.viewport,
                         self._rectangle_base_width(self.start_point, self.second_point, point))
         except WallError as exc:
-            self.controller.message(str(exc), error=True)
+            self._warn(ctx.viewport, str(exc))
         ctx.viewport.update()
 
     def on_hover(self, ctx):
@@ -168,7 +187,7 @@ class WallTool(AxisMagnet, Tool):
             raise WallError(viewport.history.last_error)
         self.reset()
         viewport.notify_scene_changed()
-        self.controller.message("Parede criada. Clique para iniciar outra; Esc para sair.")
+        show_step(self, viewport, "wall.segment.created")
 
     def commit_rectangle(self, viewport, polygon):
         self._check_scene(viewport)
@@ -182,8 +201,10 @@ class WallTool(AxisMagnet, Tool):
             raise WallError(viewport.history.last_error)
         self.reset()
         viewport.notify_scene_changed()
-        self.controller.message(
-            "Bloco de quatro paredes criado. Cada lado permanece uma parede paramétrica independente.")
+        if self.mode == self.MODE_RECT_DIAGONAL:
+            show_step(self, viewport, "wall.rect_diag.created")
+        else:
+            show_step(self, viewport, "wall.rect_base.created")
 
     def on_value(self, viewport, value):
         try:
@@ -213,9 +234,7 @@ class WallTool(AxisMagnet, Tool):
                         raise WallError("Aponte a direção da base com o mouse.")
                     self.second_point = self.start_point + direction.normalized() * value
                     self.hover_point = QVector3D(self.second_point)
-                    if hasattr(self.controller, "hide_straight_mode_palette"):
-                        self.controller.hide_straight_mode_palette()
-                    self.controller.message("Base definida. Aponte o lado e digite/click a profundidade.")
+                    show_step(self, viewport, "wall.rect_base.width_value")
                     viewport.update()
                     return True
                 d = self.second_point - self.start_point
@@ -235,14 +254,14 @@ class WallTool(AxisMagnet, Tool):
 
             raise WallError("No modo por diagonal, indique o canto oposto com o mouse.")
         except WallError as exc:
-            self.controller.message(str(exc), error=True)
+            self._warn(viewport, str(exc))
             return False
 
     def on_cancel(self, viewport):
         if self.start_point is not None:
             self.reset()
             viewport.update()
-            self.controller.message("Trecho/bloco cancelado. Clique para iniciar; Esc para sair.")
+            show_step(self, viewport, "wall.segment.cancel")
         else:
             QTimer.singleShot(0, self.controller.stop_drawing)
 
@@ -319,9 +338,6 @@ class CurvedWallTool(WallTool):
     def reset(self):
         self.first_point = self.second_point = self.hover_point = None
         self.scene_at_start = None
-        self.mode = self.MODE_NORMAL
-        if hasattr(self.controller, "hide_curve_mode_palette"):
-            self.controller.hide_curve_mode_palette()
         if hasattr(self.controller, "fields"):
             self.controller.preview_length(0.0)
 
@@ -333,21 +349,39 @@ class CurvedWallTool(WallTool):
         # becomes the centre; in the other two it is the first wall point.
         self.second_point = None
         self.hover_point = self.first_point
-        labels = {
-            self.MODE_NORMAL: "Arco padrão: indique o segundo extremo e depois puxe a curva.",
-            self.MODE_CENTER: "Arco pelo centro: o primeiro ponto é o centro. Indique agora o início da parede.",
-            self.MODE_THREE: "Arco por 3 pontos: indique um ponto intermediário por onde o arco deve passar.",
-        }
-        self.controller.message(labels[mode])
-        self.controller.app.viewport.update()
+        viewport = self.controller.app.viewport
+        if viewport.active_tool is self.controller.draw_tool:
+            if self.first_point is None:
+                self._show_start(viewport)
+            else:
+                self._show_second(viewport)
+        viewport.update()
 
     def on_activate(self, viewport):
         self.reset()
+        self._show_start(viewport)
         self.controller.schedule_refresh()
 
     def on_deactivate(self, viewport):
         self.reset()
+        self.controller.app.window.statusBar().clearMessage()
         self.controller.schedule_refresh()
+
+    def _show_start(self, viewport):
+        if self.mode == self.MODE_CENTER:
+            show_step(self, viewport, "wall.arc_center.choose")
+        elif self.mode == self.MODE_THREE:
+            show_step(self, viewport, "wall.arc_three.choose")
+        else:
+            show_step(self, viewport, "wall.arc_normal.start")
+
+    def _show_second(self, viewport):
+        if self.mode == self.MODE_CENTER:
+            show_step(self, viewport, "wall.arc_center.after_first")
+        elif self.mode == self.MODE_THREE:
+            show_step(self, viewport, "wall.arc_three.after_first")
+        else:
+            show_step(self, viewport, "wall.arc_normal.second")
 
     def _check_scene(self, viewport):
         if self.scene_at_start is not None and self.scene_at_start is not viewport.scene:
@@ -458,22 +492,18 @@ class CurvedWallTool(WallTool):
             if self.first_point is None:
                 self.first_point = self.hover_point = point
                 self.scene_at_start = ctx.viewport.scene
-                self.mode = self.MODE_NORMAL
-                self.controller.show_curve_mode_palette(ctx.screen)
-                self.controller.message(
-                    "Arco padrão ativo. Indique o segundo extremo ou escolha outro método na paleta flutuante.")
+                self._show_second(ctx.viewport)
             elif self.second_point is None:
                 if (point - self.first_point).length() < MIN_DIM:
                     raise WallError("Indique um segundo ponto diferente do primeiro.")
                 self.second_point = point
                 self.hover_point = point
-                self.controller.hide_curve_mode_palette()
                 if self.mode == self.MODE_NORMAL:
-                    self.controller.message("Puxe o arco para qualquer lado e clique para confirmar.")
+                    show_step(self, ctx.viewport, "wall.arc_normal.bulge")
                 elif self.mode == self.MODE_CENTER:
-                    self.controller.message("Indique o fim do arco; a distância ao centro define o raio.")
+                    show_step(self, ctx.viewport, "wall.arc_center.end")
                 else:
-                    self.controller.message("Indique o terceiro ponto/fim da parede curva.")
+                    show_step(self, ctx.viewport, "wall.arc_three.end")
             else:
                 self.hover_point = point
                 spec = self._valid_spec(self._current_spec())
@@ -481,7 +511,7 @@ class CurvedWallTool(WallTool):
                     raise WallError("Os pontos ainda não definem um arco válido.")
                 self.commit(ctx.viewport, *spec)
         except WallError as exc:
-            self.controller.message(str(exc), error=True)
+            self._warn(ctx.viewport, str(exc))
         ctx.viewport.update()
 
     def on_hover(self, ctx):
@@ -511,7 +541,7 @@ class CurvedWallTool(WallTool):
             raise WallError(viewport.history.last_error)
         self.reset()
         viewport.notify_scene_changed()
-        self.controller.message("Parede curva criada. Clique para iniciar outra; Esc para sair.")
+        show_step(self, viewport, "wall.arc_normal.created")
 
     def on_value(self, viewport, value):
         # Numeric sagitta is useful in the default endpoint method after point 2.
@@ -530,14 +560,14 @@ class CurvedWallTool(WallTool):
             self.commit(viewport, self.first_point, self.second_point, h)
             return True
         except WallError as exc:
-            self.controller.message(str(exc), error=True)
+            self._warn(viewport, str(exc))
             return False
 
     def on_cancel(self, viewport):
         if self.first_point is not None:
             self.reset()
             viewport.update()
-            self.controller.message("Arco cancelado. Clique para iniciar outro; Esc para sair.")
+            show_step(self, viewport, "wall.arc.cancel")
         else:
             QTimer.singleShot(0, self.controller.stop_drawing)
 
@@ -600,3 +630,130 @@ class CurvedWallTool(WallTool):
             f"flecha {spec[2]:.4f} m".replace(".", ","),
             QVector3D(self.hover_point),
         )
+
+
+class WallDrawTool(Tool):
+    """The Wall tool: straight walls, rectangular blocks and curved walls.
+
+    The host sees one tool. ``geometry`` picks the inner tool that does the work,
+    and changing it never changes the host tool. The last geometry of the session
+    is kept in the inner tools' ``mode``, which only ``set_geometry`` changes.
+    """
+
+    name = "Parede paramétrica"
+    description = "Desenhar parede reta, bloco retangular ou parede curva."
+    STRAIGHT = {
+        "single": WallTool.MODE_SINGLE,
+        "rect_diagonal": WallTool.MODE_RECT_DIAGONAL,
+        "rect_base_width": WallTool.MODE_RECT_BASE_WIDTH,
+    }
+    ARCS = {
+        "arc_normal": CurvedWallTool.MODE_NORMAL,
+        "arc_center": CurvedWallTool.MODE_CENTER,
+        "arc_three": CurvedWallTool.MODE_THREE,
+    }
+
+    def __init__(self, straight, curved):
+        self.straight = straight
+        self.curved = curved
+        self.geometry = "single"
+        self.viewport = None
+
+    @property
+    def current(self):
+        return self.curved if self.geometry in self.ARCS else self.straight
+
+    def set_geometry(self, geometry):
+        if geometry not in self.STRAIGHT and geometry not in self.ARCS:
+            raise WallError("Geometria de parede desconhecida.")
+        before = self.current
+        self.geometry = geometry
+        after = self.current
+        after.set_mode(self.ARCS.get(geometry) or self.STRAIGHT[geometry])
+        if after is not before and self.viewport is not None:
+            before.on_deactivate(self.viewport)
+            after.on_activate(self.viewport)
+
+    def on_activate(self, viewport):
+        self.viewport = viewport
+        self.current.on_activate(viewport)
+
+    def on_deactivate(self, viewport):
+        self.current.on_deactivate(viewport)
+        self.viewport = None
+
+    @property
+    def uses_snap(self):
+        return self.current.uses_snap
+
+    @property
+    def wireframe_color(self):
+        return self.current.wireframe_color
+
+    @property
+    def vcb_label(self):
+        return self.current.vcb_label
+
+    @property
+    def architecture_angle_snap(self):
+        return self.current.architecture_angle_snap
+
+    @property
+    def magnetic_axis_deg(self):
+        return self.current.magnetic_axis_deg
+
+    @property
+    def screen_axis_px(self):
+        return self.current.screen_axis_px
+
+    @property
+    def start_point(self):
+        return self.current.start_point
+
+    def value_label(self):
+        return self.current.value_label()
+
+    def drag_plane(self, viewport):
+        return self.current.drag_plane(viewport)
+
+    def on_click(self, ctx):
+        self.current.on_click(ctx)
+
+    def on_hover(self, ctx):
+        self.current.on_hover(ctx)
+
+    def on_double_click(self, ctx):
+        self.current.on_double_click(ctx)
+
+    def on_triple_click(self, ctx):
+        self.current.on_triple_click(ctx)
+
+    def on_box_select(self, viewport, rect, crossing, additive=False, mode=None):
+        self.current.on_box_select(viewport, rect, crossing, additive, mode)
+
+    def on_cancel(self, viewport):
+        self.current.on_cancel(viewport)
+
+    def on_release(self, viewport):
+        self.current.on_release(viewport)
+
+    def on_key(self, viewport, key, modifiers):
+        return self.current.on_key(viewport, key, modifiers)
+
+    def on_value(self, viewport, value):
+        return self.current.on_value(viewport, value)
+
+    def status_clause(self):
+        return self.current.status_clause()
+
+    def rubber_band_lines(self):
+        return self.current.rubber_band_lines()
+
+    def guide_preview_lines(self):
+        return self.current.guide_preview_lines()
+
+    def inference_guide_lines(self):
+        return self.current.inference_guide_lines()
+
+    def preview_faces(self):
+        return self.current.preview_faces()

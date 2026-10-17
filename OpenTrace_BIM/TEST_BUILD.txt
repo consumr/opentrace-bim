@@ -1,0 +1,7 @@
+OpenTrace BIM v0.42.0 — RELEASE CANDIDATE (NOT YET WINDOWS-APPROVED)
+Build date: 2026-10-16
+Source: integrated IFC/walls/materials/libraries + doors V9.1; later English/grooves/isometric and interactive checkbox fixes.
+Only production code change versus uploaded complete source: OpenTrace_BIM/__init__.py version 0.12.9 -> 0.42.0. Installation instructions corrected; release metadata added. No other production logic changed.
+Automated regression: 100 generic + 71 door/editor + 3 merge + 12 focused door (9+3), passed. Some subsets overlap. V7/V8 and 36-style family sweep passed.
+Live Qt/Windows host, .igz persistence and IFC external interoperability: NOT VERIFIED for this candidate.
+Manual install only. GitHub and remote updater catalogue unchanged.

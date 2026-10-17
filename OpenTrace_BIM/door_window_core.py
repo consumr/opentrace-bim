@@ -1,0 +1,658 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Host-independent parameter contracts for doors and windows (stage 02).
+
+A fill is a SEPARATE parametric object, identified by a stable id and linked
+to a wall opening by opening_id/source_id. No Qt, scene writes, meshes, IFC
+exports, UI hooks or release side effects occur when this module is imported.
+
+All distances are metres. The station is the location of the chosen anchor
+(left, centre, right) on the wall reference line; changing width keeps this
+anchor fixed. One swing switch flips the *direction*, not the host opening.
+"""
+from __future__ import annotations
+
+from .door_leaf_grid import normalize_leaf_grid
+from .door_grooves import normalize_grooves
+import math
+import copy
+
+SCHEMA = 1  # Window schema; window records remain unchanged.
+SCHEMA_DOOR = 2
+DOOR_FAMILIES = {
+    "swing_single": {
+        "code": "F01", "name": "Abrir · 1 folha", "enabled": True,
+        "clearances": {"left": 0.04, "right": 0.04, "top": 0.04, "bottom": 0.0},
+    },
+    "swing_double": {"code": "F02", "name": "Abrir · 2 folhas", "enabled": False},
+    "sliding_surface": {"code": "F03", "name": "Correr aparente", "enabled": True,
+                        "clearances": {"left": .04, "right": .04, "top": .04, "bottom": 0.}},
+    "sliding_pocket": {"code": "F04", "name": "Correr embutida", "enabled": True,
+                       "clearances": {"left": .04, "right": .04, "top": .04, "bottom": 0.}},
+    "composite": {"code": "F05", "name": "Composta", "enabled": False},
+    "pivot": {"code": "F06", "name": "Pivotante", "enabled": False},
+    "folding": {"code": "F07", "name": "Articulada/camarão/sanfonada", "enabled": False},
+    "revolving_special": {"code": "F08", "name": "Vaivém/giratória/especial", "enabled": False},
+}
+ANCHORS = ("left", "center", "right")
+KINDS = ("door", "window")
+HINGES = ("left", "right")
+F01_VARIANTS = ("plain", "grooved", "panelled", "grid")
+# A technical starting allowance, not a certified installation tolerance.
+# The moving-leaf gap is independent of the 40 mm construction clearances.
+F01_OPERATING_GAP = 0.003
+
+
+
+class FillError(ValueError):
+    pass
+
+
+def _number(value, label, *, positive=False, minimum=None):
+    if isinstance(value, bool):
+        raise FillError(f"{label}: número inválido.")
+    try:
+        result = float(value.replace(",", ".").strip() if isinstance(value, str) else value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise FillError(f"{label}: número inválido.") from exc
+    if not math.isfinite(result):
+        raise FillError(f"{label}: número não finito.")
+    if positive and result <= 0:
+        raise FillError(f"{label}: medida deve ser positiva.")
+    if minimum is not None and result < minimum:
+        raise FillError(f"{label}: medida abaixo do mínimo.")
+    return result
+
+
+def migrate_door(raw):
+    """Migrate a legacy hosted door without changing its cut or appearance.
+
+    Migration is non-destructive for unknown extension metadata. The schema-1
+    open_angle is replaced by independent plan/model angles.
+    """
+    if not isinstance(raw, dict) or str(raw.get("kind", "")).lower() != "door":
+        raise FillError("Migração exige registro de porta.")
+    schema = raw.get("schema", 1)
+    if schema in (2, "2"):
+        return copy.deepcopy(raw)
+    if schema not in (1, "1", None):
+        raise FillError(f"Versão de porta não suportada (schema {schema}).")
+    result = copy.deepcopy(raw)
+    angle = result.pop("open_angle", 90)
+    result.update({
+        "schema": SCHEMA_DOOR,
+        "family_key": "swing_single",
+        "host_mode": "hosted",
+        "clearance_left": 0.0, "clearance_right": 0.0,
+        "clearance_top": 0.0, "clearance_bottom": 0.0,
+        "plan_angle": angle, "model_angle": angle,
+    })
+    # The legacy default anchor was left, unlike a new schema-2 door.
+    result.setdefault("anchor", "left")
+    return result
+
+
+def _door_schema(raw):
+    schema = raw.get("schema", 1)
+    if schema in (1, "1", None):
+        return migrate_door(raw)
+    if schema in (2, "2"):
+        return copy.deepcopy(raw)
+    try:
+        newer = int(schema)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise FillError(f"Schema de porta inválido: {schema}.") from exc
+    if newer > SCHEMA_DOOR:
+        raise FillError(
+            f"Porta salva por versão mais nova do OpenTrace BIM (schema {newer}).")
+    raise FillError(f"Versão de porta não suportada (schema {schema}).")
+
+
+def normalize_fill(raw):
+    """Validate a door/window object while preserving stable references."""
+    if not isinstance(raw, dict):
+        raise FillError("Porta ou janela precisa ser um registro.")
+    kind = str(raw.get("kind", "")).lower()
+    if kind not in KINDS:
+        raise FillError("Tipo de esquadria inválido.")
+    if kind == "door":
+        raw = _door_schema(raw)
+        family_key = str(raw.get("family_key", "swing_single"))
+        family = DOOR_FAMILIES.get(family_key)
+        if family is None:
+            raise FillError("Família de porta desconhecida.")
+        if not family["enabled"]:
+            raise FillError("Família em desenvolvimento.")
+        host_mode = str(raw.get("host_mode", "hosted"))
+        if host_mode not in ("hosted", "free"):
+            raise FillError("Modo de hospedagem inválido.")
+    uid = str(raw.get("id") or "").strip()
+    host_id = str(raw.get("host_id") or "").strip()
+    opening_id = str(raw.get("opening_id") or "").strip()
+    if kind == "window" or (kind == "door" and host_mode == "hosted"):
+        if not uid or not host_id or not opening_id:
+            raise FillError("Objeto, parede e abertura precisam de IDs persistentes.")
+    elif not uid or host_id or opening_id:
+        raise FillError("Porta livre exige ID próprio, sem parede ou abertura.")
+    anchor = str(raw.get("anchor", "center" if kind == "door" else "left")).lower()
+    if anchor not in ANCHORS:
+        raise FillError("Âncora inválida.")
+    defaults = {"door": (0.90, 2.10, 0.0), "window": (1.20, 1.20, 0.90)}
+    dw, dh, ds = defaults[kind]
+    width = _number(raw.get("width", dw), "Largura", positive=True)
+    height = _number(raw.get("height", dh), "Altura", positive=True)
+    sill = _number(raw.get("sill", ds), "Peitoril", minimum=0.0)
+    position = _number(raw.get("position"), "Posição")
+    if width < 0.05 or height < 0.05 or width > 100 or height > 100:
+        raise FillError("Dimensões fora dos limites de projeto.")
+    frame = _number(raw.get("frame_thickness", 0.04), "Espessura do marco", positive=True)
+    if frame >= min(width, height)/2:
+        raise FillError("Marco muito grande para o vão.")
+    out = {
+        "schema": SCHEMA_DOOR if kind == "door" else SCHEMA,
+        "id": uid, "kind": kind,
+        "host_id": host_id, "opening_id": opening_id,
+        "anchor": anchor, "position": position,
+        "width": width, "height": height, "sill": sill,
+        "frame_thickness": frame,
+        "name": str(raw.get("name") or ("Porta" if kind == "door" else "Janela")),
+    }
+    if kind == "door":
+        hinge = str(raw.get("hinge", "left")).lower()
+        if hinge not in HINGES:
+            raise FillError("Lado da dobradiça inválido.")
+        swing = raw.get("swing", 1)
+        if swing not in (-1, 1) or isinstance(swing, bool):
+            raise FillError("Giro precisa ser +1 ou -1.")
+        out.update({
+            "hinge": hinge, "swing": swing,
+            "leaf_thickness": _number(raw.get("leaf_thickness", 0.035),
+                                      "Espessura da folha", positive=True),
+            "family_key": family_key, "host_mode": host_mode,
+            "plan_angle": _number(raw.get("plan_angle", 90), "Ângulo da planta"),
+            "model_angle": _number(raw.get("model_angle", 0), "Ângulo do modelo"),
+        })
+        # Pre-recovery schema-2 instances lack f01_layout: preserve their
+        # existing rough cuts and dimensions. Creation stamps physical layout.
+        layout = str(raw.get("f01_layout", "legacy"))
+        if layout not in ("legacy", "physical"):
+            raise FillError("Modo dimensional F01 inválido.")
+        if "f01_layout" in raw:
+            out["f01_layout"] = layout
+        if layout == "physical":
+            variant = str(raw.get("leaf_variant", "plain"))
+            if variant not in F01_VARIANTS:
+                raise FillError("Variante F01 desconhecida.")
+            out["leaf_variant"] = variant
+            if variant == "grooved" or any(key in raw for key in ("groove_count", "groove_width", "groove_end_margin", "groove_offset")):
+                try:
+                    out.update(normalize_grooves(raw, width, height))
+                except ValueError as exc:
+                    raise FillError(str(exc)) from exc
+            if variant == "grid" or "leaf_grid" in raw:
+                try:
+                    out["leaf_grid"] = normalize_leaf_grid(
+                        raw.get("leaf_grid"), width, height,
+                        out["leaf_thickness"])
+                except ValueError as exc:
+                    raise FillError(str(exc)) from exc
+            for axis in ("left", "right", "top"):
+                out["operating_gap_" + axis] = _number(
+                    raw.get("operating_gap_" + axis, F01_OPERATING_GAP),
+                    "Folga operacional " + axis, minimum=0)
+            mode = str(raw.get("frame_depth_mode", "auto"))
+            if mode not in ("auto", "manual"):
+                raise FillError("Profundidade do batente: modo inválido.")
+            out["frame_depth_mode"] = mode
+            if mode == "manual":
+                out["frame_depth"] = _number(
+                    raw.get("frame_depth", 0.10),
+                    "Profundidade do batente", positive=True)
+            out["host_face"] = str(raw.get("host_face", "left"))
+            if out["host_face"] not in ("left", "right"):
+                raise FillError("Face de referência inválida.")
+            out["frame_recess"] = _number(
+                raw.get("frame_recess", 0), "Recuo do batente", minimum=0)
+            out["trim_front_enabled"] = bool(raw.get("trim_front_enabled", True))
+            out["trim_back_enabled"] = bool(raw.get("trim_back_enabled", True))
+            out["trim_width"] = _number(
+                raw.get("trim_width", 0.06), "Largura do alizar", positive=True)
+            out["trim_thickness"] = _number(
+                raw.get("trim_thickness", 0.012),
+                "Espessura do alizar", positive=True)
+            # Independent native host material dictionaries per component.
+            for component in ("leaf_front", "leaf_back", "leaf_edge",
+                              "leaf_stile", "leaf_rail", "leaf_mullion",
+                              "leaf_transom", "leaf_glass", "leaf_solid",
+                              "leaf_louver", "frame",
+                              "trim_front", "trim_back", "hardware"):
+                key = "material_" + component
+                if key in raw:
+                    if raw[key] is not None and not isinstance(raw[key], dict):
+                        raise FillError("Material de componente inválido: " + key)
+                    out[key] = copy.deepcopy(raw[key])
+        if family_key in ("sliding_surface", "sliding_pocket"):
+            if family_key == "sliding_pocket" and "pocket_layout" in raw:
+                pocket_layout=str(raw["pocket_layout"])
+                if pocket_layout not in ("legacy","sleeve"):
+                    raise FillError("Tipo de alojamento da porta embutida inválido.")
+                out["pocket_layout"]=pocket_layout
+            side = str(raw.get("slide_side", "left"))
+            if side not in ("left", "right"):
+                raise FillError("Direção do correr inválida.")
+            out["slide_side"] = side
+            fraction = _number(raw.get("slide_open_fraction", 0.0),
+                               "Abertura da porta de correr", minimum=0)
+            if fraction > 1:
+                raise FillError("Abertura da porta de correr deve ficar entre 0 e 1.")
+            out["slide_open_fraction"] = fraction
+            out["slide_overlap"] = _number(raw.get("slide_overlap", .04),
+                                            "Sobreposição da folha", minimum=0)
+            if out["slide_overlap"] >= width/3:
+                raise FillError("Sobreposição excessiva para a largura da folha.")
+        # Unit sizes are explicit instance overrides only. Without a key,
+        # the unit follows the nominal width/height at evaluation time.
+        for axis, label in (("width", "Largura do conjunto"),
+                            ("height", "Altura do conjunto")):
+            key = "unit_" + axis
+            if key in raw:
+                out[key] = _number(raw[key], label, positive=True)
+        for side in ("left", "right", "top", "bottom"):
+            out["clearance_" + side] = _number(
+                raw.get("clearance_" + side, family["clearances"][side]),
+                "Folga " + side, minimum=0.0)
+        if layout == "physical":
+            minimum_width = (width + 2 * frame +
+                             out["operating_gap_left"] +
+                             out["operating_gap_right"])
+            minimum_height = height + frame + out["operating_gap_top"]
+            if "unit_width" in out and out["unit_width"] < minimum_width - 1e-9:
+                raise FillError("Conjunto menor que folha, marco e folgas móveis.")
+            if "unit_height" in out and out["unit_height"] < minimum_height - 1e-9:
+                raise FillError("Conjunto menor que folha e travessa superior.")
+            if out["trim_thickness"] >= out["trim_width"]:
+                raise FillError("Alizar: espessura deve ser menor que largura.")
+        for angle in ("plan_angle", "model_angle"):
+            if not 0 <= out[angle] <= 180:
+                raise FillError(f"{angle}: ângulo fora do intervalo de 0 a 180°.")
+    else:
+        out["panes"] = int(raw.get("panes", 1))
+        if not 1 <= out["panes"] <= 16:
+            raise FillError("Quantidade de folhas inválida.")
+        # Window schema-1 records remain byte-compatible by default.
+        # New glazing overrides are optional, never retroactively inserted.
+        if "glass_thickness" in raw:
+            out["glass_thickness"] = _number(
+                raw["glass_thickness"], "Espessura do vidro", positive=True)
+            if out["glass_thickness"] >= frame:
+                raise FillError("Vidro não pode ser mais espesso que o marco.")
+        # Opt-in visual composition for windows. Legacy schema-1 windows have
+        # neither field and retain the exact prior pane algorithm and geometry.
+        if "window_grid_enabled" in raw or "window_grid" in raw:
+            enabled = raw.get("window_grid_enabled", False)
+            if not isinstance(enabled, bool):
+                raise FillError("Modo visual da janela inválido.")
+            out["window_grid_enabled"] = enabled
+            if enabled:
+                try:
+                    out["window_grid"] = normalize_leaf_grid(
+                        raw.get("window_grid"), width - 2*frame,
+                        height - 2*frame, frame)
+                except ValueError as exc:
+                    raise FillError(str(exc)) from exc
+            elif "window_grid" in raw:
+                # Inactive geometry is only a remembered editing draft. Do not
+                # block edits to a legacy window if its dormant grid no longer
+                # fits after a change of overall dimensions.
+                if not isinstance(raw["window_grid"], dict):
+                    raise FillError("Composição armazenada da janela inválida.")
+                out["window_grid"] = copy.deepcopy(raw["window_grid"])
+        for component in ("window_frame", "window_glass"):
+            key = "material_" + component
+            if key in raw:
+                if raw[key] is not None and not isinstance(raw[key], dict):
+                    raise FillError("Material de janela inválido: " + key)
+                out[key] = copy.deepcopy(raw[key])
+    for key in ("ifc_global_id", "type_name", "material_name"):
+        if raw.get(key):
+            out[key] = str(raw[key])
+    if kind == "door":
+        # Retain extension/vendor fields without altering their values.
+        preserved = copy.deepcopy(raw)
+        preserved.pop("open_angle", None)
+        preserved.update(out)
+        return preserved
+    return out
+
+
+def station_span(raw):
+    """Nominal leaf stations, with door anchors measured on the rough opening."""
+    spec = normalize_fill(raw)
+    if spec["kind"] == "door":
+        rough_left, _rough_right = wallhole_span(spec)
+        if spec.get("f01_layout") == "physical":
+            start = (rough_left + spec["clearance_left"]
+                     + spec["frame_thickness"] + spec["operating_gap_left"]
+                     + (f01_unit_size(spec)[0] - f01_minimum_unit(spec)[0]) / 2)
+        else:
+            unit_width = spec.get("unit_width", spec["width"])
+            start = rough_left + spec["clearance_left"] + (unit_width - spec["width"]) / 2
+    else:
+        shift = {"left": 0.0, "center": 0.5, "right": 1.0}[spec["anchor"]]
+        start = spec["position"] - shift * spec["width"]
+    return start, start + spec["width"]
+
+
+def center_station(raw):
+    a, b = station_span(raw)
+    return (a+b)/2
+
+
+def f01_minimum_unit(raw):
+    """Physical assembly minimum around an unaltered nominal leaf."""
+    spec = normalize_fill(raw)
+    if spec["kind"] != "door" or spec.get("f01_layout") != "physical":
+        raise FillError("Cálculo físico exige F01 com construção física.")
+    f = spec["frame_thickness"]
+    return (spec["width"] + 2*f + spec["operating_gap_left"]
+            + spec["operating_gap_right"],
+            spec["height"] + f + spec["operating_gap_top"])
+
+
+def f01_unit_size(raw):
+    """External unit dimensions, distinct from leaf and installation gaps."""
+    spec = normalize_fill(raw)
+    if spec.get("f01_layout") == "physical":
+        width, height = f01_minimum_unit(spec)
+        return spec.get("unit_width", width), spec.get("unit_height", height)
+    return (spec.get("unit_width", spec["width"]),
+            spec.get("unit_height", spec["height"]))
+
+
+def wallhole_size(raw):
+    """Physical rough opening for a door; nominal dimensions stay unchanged."""
+    spec = normalize_fill(raw)
+    if spec["kind"] != "door":
+        raise FillError("Vão de obra calculado apenas para portas.")
+    unit_width, unit_height = f01_unit_size(spec)
+    return (unit_width + spec["clearance_left"] + spec["clearance_right"],
+            unit_height + spec["clearance_top"] + spec["clearance_bottom"])
+
+
+def edit_fill_from_cut_dimension(raw, dimension, requested_cut):
+    """Translate a rough-opening spin edit without overwriting nominal leaf.
+
+    When a manufacturer-sized external unit override exists, edit that unit.
+    Otherwise edit the physical leaf by the DIFFERENCE in cut dimension.
+    """
+    spec = normalize_fill(raw)
+    if dimension not in ("width", "height"):
+        raise FillError("Dimensão de corte inválida.")
+    target = _number(requested_cut, "Dimensão de corte", positive=True)
+    if spec["kind"] == "window":
+        return {dimension: target}
+    cut_width, cut_height = wallhole_size(spec)
+    old_cut = cut_width if dimension == "width" else cut_height
+    key = "unit_" + dimension if "unit_" + dimension in spec else dimension
+    proposed = spec[key] + target - old_cut
+    if proposed <= 0:
+        raise FillError("Dimensão de corte menor que o conjunto físico.")
+    changes = {key: proposed}
+    # Avoid half-valid commands that could modify the host's cut on error.
+    normalize_fill(dict(spec, **changes))
+    return changes
+
+
+def wallhole_span(raw):
+    """Left/right rough-cut stations, keeping the chosen unit anchor fixed."""
+    spec = normalize_fill(raw)
+    if spec["kind"] != "door":
+        raise FillError("Vão de obra calculado apenas para portas.")
+    shift = {"left": 0.0, "center": 0.5, "right": 1.0}[spec["anchor"]]
+    cut_width, _cut_height = wallhole_size(spec)
+    left = spec["position"] - shift * cut_width
+    return left, left + cut_width
+
+
+def pocket_extent(raw):
+    """Length of the lateral sleeve, including travel and installation margin.
+
+    This is not the clear passage: the pocket is behind two generated wall
+    skins, within the same undoable host opening as the door.
+    """
+    spec = normalize_fill(raw)
+    if (spec["kind"] != "door" or spec["family_key"] != "sliding_pocket" or
+            spec.get("pocket_layout", "legacy") != "sleeve"):
+        return 0.0
+    return spec["width"] + spec["slide_overlap"] + 0.10
+
+
+def host_cut_span(raw):
+    """Entire host cut, including the sleeve of a recessed sliding door."""
+    spec = normalize_fill(raw)
+    if spec["kind"] != "door":
+        raise FillError("Vão ampliado disponível apenas para portas.")
+    left, right = wallhole_span(spec)
+    if spec["family_key"] == "sliding_pocket" and spec.get("pocket_layout") == "sleeve":
+        extra = pocket_extent(spec)
+        if spec["slide_side"] == "left":
+            left -= extra
+        else:
+            right += extra
+    return left, right
+
+
+def check_hosted_clearance(raw, wall_length, *, margin=.02):
+    """Protect rough cut and full sliding run (and its top track) at both ends.
+
+    UI hover/typed placement and real hosted placement call the same rule.
+    This is a station-space boundary check, not a global collision solver.
+    """
+    spec=normalize_fill(raw)
+    from math import isfinite
+    length=float(wall_length)
+    if not isfinite(length) or length <= 0:
+        raise FillError("Comprimento da parede inválido.")
+    if spec['kind']=='door':
+        left,right=host_cut_span(spec)
+        passage_left,passage_right=wallhole_span(spec)
+        if spec['family_key'] in ('sliding_surface','sliding_pocket'):
+            track_extra=spec['width']+spec['slide_overlap']
+            if spec['slide_side']=='left':
+                left=min(left,passage_left-track_extra)
+            else:
+                right=max(right,passage_right+track_extra)
+            if left < margin or right > length-margin:
+                raise FillError("Não há comprimento suficiente de parede para o curso e trilho da porta de correr neste sentido.")
+    else:
+        left,right=station_span(spec)
+    if left < margin or right > length-margin:
+        raise FillError("A esquadria está fora dos limites de ancoragem da parede.")
+    return left,right
+
+
+def reverse_swing(raw):
+    """Invert door clockwise/counterclockwise in exactly one operation."""
+    spec = normalize_fill(raw)
+    if spec["kind"] != "door" or spec["family_key"] != "swing_single":
+        raise FillError("Inversão de giro somente para portas de abrir.")
+    spec["swing"] *= -1
+    return spec
+
+
+def arched_door_opening(spec, left, cut_width, cut_height):
+    """A curved cut owned by the same ID as its leaf and frame.
+
+    Four authored corners + a genuine circular segment retain a compact,
+    editable native wall polygon.  The wall mesher samples the arc itself.
+    """
+    grid = spec.get("leaf_grid") or {}
+    if (spec.get("kind") != "door" or spec.get("leaf_variant") != "grid"
+            or not grid.get("top_arc_enabled")):
+        return None
+    rise = float(grid["top_arc_rise"])
+    if rise <= 0 or rise >= min(cut_height, cut_width / 2):
+        raise FillError("Arco da porta incompatível com o vão de obra.")
+    # Traverse the crown right-to-left: negative sagitta bulges upwards.
+    x0, x1, z0 = left, left + cut_width, spec["sill"]
+    shoulder = z0 + cut_height - rise
+    from .wall_polygon import sample_outline, normalize_polygon
+    vertices = [[x0,z0],[x1,z0],[x1,shoulder],[x0,shoulder]]
+    edges = [{"type":"line"},{"type":"line"},
+             {"type":"arc","sagitta":-rise},{"type":"line"}]
+    # Validate the *sampled* outline before mutating any wall record.
+    normalize_polygon(sample_outline(vertices,edges),
+                      max(x1 + 1., cut_width * 3.),allow_outside=True)
+    return {"kind":"polygon", "polygon":vertices, "edges":edges}
+
+
+def opening_request(raw, *, opening_guid=None):
+    """Host opening request, with fill linked to independent object by source_id.
+
+    Does NOT create a 3D element and does NOT call the host or IFC writer.
+    Geometry generation belongs to the wall; this record tells it which void
+    corresponds to the parametric fill.
+    """
+    spec = normalize_fill(raw)
+    if spec["kind"] == "door" and spec["host_mode"] == "free":
+        raise FillError("Porta livre não solicita abertura na parede.")
+    if spec["kind"] == "door":
+        passage_left, passage_right = wallhole_span(spec)
+        left, right = host_cut_span(spec)
+        cut_width, cut_height = wallhole_size(spec)
+        cut_center = (left + right) / 2
+    else:
+        cut_width, cut_height = spec["width"], spec["height"]
+        cut_center = center_station(spec)
+    opening = {
+        "id": spec["opening_id"], "kind": "rect",
+        "position": cut_center,
+        "width": (right - left) if spec["kind"] == "door" else cut_width,
+        "sill": spec["sill"],
+        "height": cut_height, "source_id": spec["id"],
+        "ifc_global_id": opening_guid,
+        "fill": {
+            "class": "IfcDoor" if spec["kind"] == "door" else "IfcWindow",
+            "global_id": spec.get("ifc_global_id"),
+            "name": spec["name"],
+            "overall_width": spec["width"],
+            "overall_height": spec["height"],
+        },
+    }
+    if spec["kind"] == "door":
+        if (spec["family_key"] == "sliding_pocket" and
+                spec.get("pocket_layout") == "sleeve" and
+                spec.get("leaf_grid", {}).get("top_arc_enabled")):
+            raise FillError("Porta embutida em arco exige alojamento curvo próprio; escolha folha reta.")
+        arch = arched_door_opening(spec, passage_left, cut_width, cut_height)
+        if arch is not None:
+            opening.update(arch)
+            for stale in ("position", "width", "sill", "height"):
+                opening.pop(stale, None)
+    return opening
+
+
+def hotspots(raw):
+    """Architectural edit permissions tied to the physical corners.
+
+    Each point can change width; ONLY the top three can edit height and
+    ONLY bottom three can edit position (via the radial choice UI).
+    """
+    spec = normalize_fill(raw)
+    left, right = station_span(spec)
+    z0 = spec["sill"]
+    z1 = z0 + spec["height"]
+    out = []
+    for row, z in (("bottom", z0), ("top", z1)):
+        for at, x in (("left", left), ("center", (left+right)/2), ("right", right)):
+            out.append({
+                "id": f"{row}-{at}",
+                "station": x,
+                "elevation": z,
+                "controls": ("width", "position") if row == "bottom"
+                            else ("width", "height"),
+            })
+    return out
+
+
+def door_leaf_plan(raw):
+    """Simple exact 2D leaf at the requested opening angle, not a scene mesh.
+
+    Returns hinge, leaf tip and sampled arc (in local station/depth plane).
+    +1/-1 switches swing direction. In plan, closed leaf lies on the wall.
+    """
+    spec = normalize_fill(raw)
+    if spec["kind"] != "door" or spec["family_key"] != "swing_single":
+        raise FillError("Planta de giro disponível apenas para portas de abrir.")
+    left, right = station_span(spec)
+    hinge = left if spec["hinge"] == "left" else right
+    direction = 1 if spec["hinge"] == "left" else -1
+    angle = math.radians(spec["plan_angle"])*spec["swing"]
+    def at(radians):
+        return [hinge + direction*spec["width"]*math.cos(radians),
+                direction*spec["width"]*math.sin(radians)]
+    arc = [at(angle*i/16) for i in range(17)]
+    return {"hinge": [hinge, 0.0], "tip": at(angle), "arc": arc}
+
+
+def window_mullions(raw):
+    """Model-plane station/elevation dividers for a simple fixed-glazing window."""
+    spec = normalize_fill(raw)
+    if spec["kind"] != "window":
+        raise FillError("Somente janelas possuem montantes de vidro.")
+    left, right = station_span(spec)
+    if spec.get("window_grid_enabled"):
+        grid = spec["window_grid"]
+        columns = grid["columns"]
+        usable = spec["width"] - 2*spec["frame_thickness"]
+        clear = (usable - 2*grid["stile_width"]
+                 - (columns-1)*grid["mullion_width"]) / columns
+        return [
+            {"station": left + spec["frame_thickness"]
+                        + grid["stile_width"] + i*clear
+                        + (i-0.5)*grid["mullion_width"],
+             "bottom": spec["sill"], "top": spec["sill"]+spec["height"]}
+            for i in range(1, columns)
+        ]
+    return [
+        {"station": left+(right-left)*i/spec["panes"],
+         "bottom": spec["sill"], "top": spec["sill"]+spec["height"]}
+        for i in range(1, spec["panes"])
+    ]
+
+
+def reanchor_fill(raw, anchor):
+    """Select left/center/right anchor without physically moving the fill.
+
+    Only the representation of the station changes, never the two endpoints.
+    """
+    spec = normalize_fill(raw)
+    target = str(anchor).lower()
+    if target not in ANCHORS:
+        raise FillError("Âncora inválida.")
+    left, right = (wallhole_span(spec) if spec["kind"] == "door"
+                   else station_span(spec))
+    spec["anchor"] = target
+    spec["position"] = {"left": left, "center": (left + right) / 2,
+                        "right": right}[target]
+    return normalize_fill(spec)
+
+
+def edit_from_hotspot(raw, point_id, action, value):
+    """Apply a radial-handle operation, preserving all stable IDs.
+
+    Width/height values are full dimensions in metres; position is the NEW
+    station of the selected lower hotspot in the wall's reference frame.
+    Permission checks live here, not just in the presentation layer.
+    """
+    spec = normalize_fill(raw)
+    hit = next((p for p in hotspots(spec) if p["id"] == point_id), None)
+    if hit is None or action not in hit["controls"]:
+        raise FillError("Operação não permitida neste hotspot.")
+    measure = _number(value, str(action))
+    if action == "position":
+        spec["position"] += measure-hit["station"]
+    elif action == "width":
+        spec["width"] = measure
+    elif action == "height":
+        spec["height"] = measure
+    return normalize_fill(spec)

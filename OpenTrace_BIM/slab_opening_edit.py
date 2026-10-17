@@ -17,12 +17,40 @@ from tools.base import AxisMagnet, Tool
 from .commands import root_edit_allowed
 from .slab_commands import EditSlab
 from .slab_edit import _distance_xy, _preview_lines, _project_to_segment
+from .step_guide import show_step, step_text
 from .slab_model import (
     ARC_EPS, MIN_DIM, SlabError, edge_length, edge_outward_normal, edge_point,
     line_edge, normalize_edge_specs, offset_boundary, sample_boundary,
     slab_openings_world, solve_corner_fillet, split_arc_edge, trim_edge_spec,
     validate_edge_geometry, validate_polygon,
 )
+
+
+class StickyOpeningFunction:
+    """Shared state for a wall or slab opening edit repeated on matching parts."""
+
+    def __init__(self):
+        self.clear()
+
+    def choose(self, tool, part):
+        self.tool = tool
+        self.part = part
+        self.waiting = False
+
+    def finished(self, active_tool):
+        if self.tool is not None and active_tool is self.tool:
+            self.waiting = True
+
+    def ready(self, active_tool, part):
+        return self.waiting and active_tool is self.tool and part == self.part
+
+    def armed(self):
+        self.waiting = False
+
+    def clear(self):
+        self.tool = None
+        self.part = None
+        self.waiting = False
 
 
 def _opening_data(slab, opening_index):
@@ -53,6 +81,7 @@ class _OpeningEditBase(AxisMagnet, Tool):
 
     def __init__(self, controller):
         self.controller = controller
+        self.step_id = "slab_opening.edit.sticky"
         self.slab = None
         self.opening_index = None
         self.index = None
@@ -84,8 +113,20 @@ class _OpeningEditBase(AxisMagnet, Tool):
             return QVector3D(q.x(), q.y(), z)
         return QVector3D(ctx.world.x(), ctx.world.y(), z)
 
-    def on_activate(self, viewport): viewport.update()
-    def on_deactivate(self, viewport): self.reset(); viewport.update()
+    def on_activate(self, viewport):
+        show_step(self, viewport, self.step_id)
+        viewport.update()
+
+    def on_deactivate(self, viewport):
+        self.reset()
+        self.controller.clear_sticky()
+        self.controller.app.window.statusBar().clearMessage()
+        viewport.update()
+
+    def status_clause(self):
+        # Kept for hosts newer than IngeTrazo 0.5.8.
+        return step_text(self.step_id)
+
     def on_cancel(self, viewport): self.reset(); QTimer.singleShot(0, self.controller.return_to_select)
 
     def _data(self):
@@ -101,7 +142,9 @@ class _OpeningEditBase(AxisMagnet, Tool):
         if viewport.history.last_error:
             raise SlabError(viewport.history.last_error)
         viewport.notify_scene_changed(); self.controller.message(message)
-        self.reset(); QTimer.singleShot(0, self.controller.return_to_select)
+        slab, opening_index = self.slab, self.opening_index
+        self.reset()
+        QTimer.singleShot(0, lambda: self.controller.edit_finished(slab, opening_index))
 
 
 class InsertOpeningVertexTool(_OpeningEditBase):
@@ -152,7 +195,7 @@ class StretchOpeningEdgeTool(_OpeningEditBase):
     def on_hover(self,ctx):self.hover=self.point(ctx);ctx.viewport.update()
     def on_click(self,ctx):
         try:self._commit(ctx.viewport,*self._candidate(self.point(ctx)),"Aresta da abertura estendida.")
-        except SlabError as exc:self.controller.message(str(exc),error=True)
+        except SlabError as exc:self.controller.message(str(exc),error=True);show_step(self,ctx.viewport,self.step_id)
         ctx.viewport.update()
     def rubber_band_lines(self):
         if self.hover is None:return []
@@ -295,7 +338,7 @@ class OffsetOpeningTool(_OpeningEditBase):
 
 class MoveOpeningTool(AxisMagnet, Tool):
     name="Mover abertura";description="Mover a abertura inteira no plano horizontal.";uses_snap=True;wireframe_color=(0.88,0.30,0.22,1.0);architecture_angle_snap=True
-    def __init__(self,controller):self.controller=controller;self.reset()
+    def __init__(self,controller):self.controller=controller;self.step_id="slab_opening.edit.move.start";self.reset()
     def arm(self,slab,token,anchor):
         if not isinstance(token,(tuple,list)) or len(token)!=2:raise SlabError("Selecione novamente a abertura.")
         self.slab=slab;self.opening_index=int(token[0]);self.anchor=QVector3D(anchor);self.origin=None;self.start_point=None;self.hover=None
@@ -304,8 +347,15 @@ class MoveOpeningTool(AxisMagnet, Tool):
     def drag_plane(self,viewport):return (QVector3D(0,0,self.anchor.z()),QVector3D(0,0,1)) if self.anchor is not None else None
     def on_activate(self,viewport):
         if self.slab is None:QTimer.singleShot(0,self.controller.return_to_select)
-        else:self.controller.message("Clique no ponto de referência para mover a abertura.")
-    def on_deactivate(self,viewport):self.reset();viewport.update()
+        else:show_step(self,viewport,"slab_opening.edit.move.start")
+    def on_deactivate(self,viewport):
+        self.reset()
+        self.controller.clear_sticky()
+        self.controller.app.window.statusBar().clearMessage()
+        viewport.update()
+    def status_clause(self):
+        # Kept for hosts newer than IngeTrazo 0.5.8.
+        return step_text(self.step_id)
     def _delta(self,p):
         if self.origin is None:return QVector3D(0,0,0)
         return QVector3D(p.x()-self.origin.x(),p.y()-self.origin.y(),0)
@@ -317,11 +367,14 @@ class MoveOpeningTool(AxisMagnet, Tool):
     def on_click(self,ctx):
         try:
             if self.origin is None:
-                self.origin=QVector3D(ctx.world);self.start_point=QVector3D(ctx.world);self.hover=None;self.controller.message("Agora clique no ponto de destino da abertura.");ctx.viewport.update();return
+                self.origin=QVector3D(ctx.world);self.start_point=QVector3D(ctx.world);self.hover=None;show_step(self,ctx.viewport,"slab_opening.edit.move.end");ctx.viewport.update();return
             pts,specs=self._candidate(ctx.world);ops,oi,item,_p,_s=_opening_data(self.slab,self.opening_index);new_ops=_store_opening(ops,oi,item,pts,specs)
             ctx.viewport.history.execute(EditSlab(ctx.viewport.scene,self.slab,openings=new_ops))
             if ctx.viewport.history.last_error:raise SlabError(ctx.viewport.history.last_error)
-            ctx.viewport.notify_scene_changed();self.controller.message("Abertura movida.");self.reset();self.controller.return_to_select()
+            ctx.viewport.notify_scene_changed();self.controller.message("Abertura movida.")
+            slab, oi = self.slab, self.opening_index
+            self.reset()
+            self.controller.edit_finished(slab, oi)
         except SlabError as exc:self.controller.message(str(exc),error=True)
         ctx.viewport.update()
     def on_cancel(self,viewport):self.reset();self.controller.return_to_select();viewport.update()

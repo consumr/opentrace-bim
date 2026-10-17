@@ -6,10 +6,11 @@ from PySide6.QtGui import QMatrix4x4, QVector3D
 
 from core.history import Command
 from .materials import stamp_named_material, stamp_structured_materials
+from .wall_edge_finishes import stamp_wall_edge_finishes, normalize_edge_finishes
 from .model import (ARC_EPS, DERIVED_KEY, KEY, MIN_DIM, MAX_DIM, WallError,
                     arc_points, arc_record, build_body, build_children, edit_placement,
                     make_arc_wall, make_wall_segment, path_length, path_length_from_record,
-                    path_world, read_wall, record, validate, wall_path,
+                    path_world, read_wall, record, validate, wall_caps, wall_path,
                     wall_path_kind, wall_record, wall_reference_vertices, reference_vertices_world, wall_has_custom_profile, profile_at_fraction,
                     finalize_wall_surface_maps)
 
@@ -29,6 +30,8 @@ class CreateWall(Command):
             raise WallError("A parede já está no documento.")
         from .bim import ensure_ifc_identity
         ensure_ifc_identity(self.group, "IfcWall")
+        from .creation_properties import apply_creation_properties
+        apply_creation_properties(self, scene, [self.group], "wall")
         rec=wall_record(self.group) or {}
         stamp_structured_materials(self.group, scene, rec)
         try:
@@ -36,6 +39,7 @@ class CreateWall(Command):
                                        smooth_path=(wall_path_kind(self.group) == "arc"))
         except Exception:
             pass
+        stamp_wall_edge_finishes(self.group, scene, rec)
         if self.index is None:
             self.index = len(scene.groups)
         scene.groups.insert(min(self.index, len(scene.groups)), self.group)
@@ -65,6 +69,8 @@ class CreateWalls(Command):
             raise WallError("Uma das paredes já está no documento.")
         if self.index is None:
             self.index = len(scene.groups)
+        from .creation_properties import apply_creation_properties
+        apply_creation_properties(self, scene, self.groups, "wall")
         at = min(self.index, len(scene.groups))
         inserted = []
         try:
@@ -78,6 +84,7 @@ class CreateWalls(Command):
                                                smooth_path=(wall_path_kind(group) == "arc"))
                 except Exception:
                     pass
+                stamp_wall_edge_finishes(group, scene, rec)
                 scene.groups.insert(at + i, group)
                 inserted.append(group)
         except Exception:
@@ -93,6 +100,131 @@ class CreateWalls(Command):
                 scene.groups.remove(group)
             scene.selection.discard(group)
         scene.version += 1
+
+
+
+class PaintWallBodyMaterial(Command):
+    """Change the material of an existing *simple* wall without rebuilding it.
+
+    A normal property edit is not a preset operation. Keep the wall geometry,
+    selected object and IFC identity stable; repaint its actual native faces,
+    preserve optional end/top/bottom overrides, and refresh the host render
+    cache on do/undo/redo. This avoids an expensive full mesh rebuild merely
+    because the user selected a different surface material.
+    """
+
+    def __init__(self, scene, group, material_name):
+        root_edit_allowed(scene)
+        if group not in scene.groups or not scene.entity_selectable(group):
+            raise WallError("Select an editable wall to change its material.")
+        values = read_wall(group)
+        if values.get("structure") != "simple":
+            raise WallError("Edit composite wall materials in its layer list.")
+        self.group = group
+        self.before_name = values.get("material_name")
+        self.after_name = material_name or None
+        self.before_faces = self._snapshot()
+        if not self.before_faces:
+            raise WallError("This wall has no paintable geometry.")
+        self.after_faces = None
+
+    def _snapshot(self):
+        return [(face, copy.deepcopy(face.attrs))
+                for child in getattr(self.group, "children", ())
+                for face in getattr(getattr(child, "mesh", None), "faces", ())]
+
+    def _restore(self, scene, name, appearance):
+        self.group.ext[KEY]["material_name"] = name
+        for face, attrs in appearance:
+            face.attrs.clear()
+            face.attrs.update(copy.deepcopy(attrs))
+        from .wall_edge_finishes import invalidate_wall_face_appearance
+        invalidate_wall_face_appearance(self.group)
+        scene.version += 1
+
+    def do(self, scene):
+        if self.after_faces is not None:
+            self._restore(scene, self.after_name, self.after_faces)
+            return
+        from .materials import material_face_attrs
+        if self.after_name and material_face_attrs(scene, self.after_name) is None:
+            raise WallError(f"Wall material not found: {self.after_name}")
+        self.group.ext[KEY]["material_name"] = self.after_name
+        data = read_wall(self.group)
+        # Stamp *real* native face attributes. Then explicitly restore
+        # independently selected cap coatings on top of the body paint.
+        stamp_structured_materials(self.group, scene, data, clear=True)
+        stamp_wall_edge_finishes(self.group, scene, data, restore_defaults=True)
+        from .wall_edge_finishes import invalidate_wall_face_appearance
+        invalidate_wall_face_appearance(self.group)
+        self.after_faces = self._snapshot()
+        scene.version += 1
+
+    def undo(self, scene):
+        self._restore(scene, self.before_name, self.before_faces)
+
+class PaintWallLayerMaterials(Command):
+    """Repaint composite layers in native history without rebuilding any mesh.
+
+    This is deliberately limited to a material-only change: geometry, layer
+    order, thickness and layer metadata must all stay identical. Full structural
+    edits continue through EditWall.
+    """
+
+    def __init__(self, scene, group, layers):
+        root_edit_allowed(scene)
+        if group not in scene.groups or not scene.entity_selectable(group):
+            raise WallError("Select an editable composite wall to paint its layers.")
+        values = read_wall(group)
+        if values.get("structure") != "composite":
+            raise WallError("Only composite walls have separately paintable layers.")
+        self.group = group
+        self.before_layers = copy.deepcopy(values["layers"])
+        self.after_layers = copy.deepcopy(layers)
+        if len(self.after_layers) != len(self.before_layers) or len(group.children) != len(self.after_layers):
+            raise WallError("Layer topology has changed; use the wall geometry editor.")
+        for before, after in zip(self.before_layers, self.after_layers):
+            if ({k: v for k, v in before.items() if k != "material_name"} !=
+                    {k: v for k, v in after.items() if k != "material_name"}):
+                raise WallError("Only material-only layer edits can be painted without rebuilding.")
+        self.before_faces = self._snapshot()
+        self.after_faces = None
+
+    def _snapshot(self):
+        return [(face, copy.deepcopy(face.attrs))
+                for child in self.group.children
+                for face in getattr(getattr(child, "mesh", None), "faces", ())]
+
+    def _restore(self, scene, layers, attrs):
+        self.group.ext[KEY]["layers"] = copy.deepcopy(layers)
+        for face, appearance in attrs:
+            face.attrs.clear()
+            face.attrs.update(copy.deepcopy(appearance))
+        from .wall_edge_finishes import invalidate_wall_face_appearance
+        invalidate_wall_face_appearance(self.group)
+        scene.version += 1
+
+    def do(self, scene):
+        if self.after_faces is not None:
+            self._restore(scene, self.after_layers, self.after_faces)
+            return
+        from .materials import material_face_attrs
+        # Resolve first: an unavailable material must not partially repaint.
+        for layer in self.after_layers:
+            name = layer.get("material_name")
+            if name and material_face_attrs(scene, name) is None:
+                raise WallError(f"Wall layer material not found: {name}")
+        self.group.ext[KEY]["layers"] = copy.deepcopy(self.after_layers)
+        values = read_wall(self.group)
+        stamp_structured_materials(self.group, scene, values, clear=True)
+        stamp_wall_edge_finishes(self.group, scene, values, restore_defaults=True)
+        from .wall_edge_finishes import invalidate_wall_face_appearance
+        invalidate_wall_face_appearance(self.group)
+        self.after_faces = self._snapshot()
+        scene.version += 1
+
+    def undo(self, scene):
+        self._restore(scene, self.before_layers, self.before_faces)
 
 
 class EditWall(Command):
@@ -137,17 +269,27 @@ class EditWall(Command):
         else:
             path_record = copy.deepcopy(rec.get("path")) if rec else None
             p["length"] = path_length_from_record(rec) if rec else path_length(path)
+        # A change to the cut alone must not erase the host's stable junction
+        # caps and immediately regenerate its expensive mesh a second time.
+        # Complex overlap/crease masks still take the full derived cleanup path.
+        same_host = all(p.get(k) == old.get(k) for k in old if k != "openings")
+        derived = (group.ext or {}).get(DERIVED_KEY, {})
+        safe_derived = (same_host and isinstance(derived, dict)
+                        and not derived.get("creases") and not derived.get("edge_masks"))
+        caps = wall_caps(group) if safe_derived else None
         children = build_children(p, previous_children=group.children, path=path,
-                                  smooth_path=(kind == "arc"))
+                                  caps=caps, smooth_path=(kind == "arc"))
         temp = type("_LayerHolder", (), {})(); temp.children=children
         stamp_structured_materials(temp, scene, p, clear=True)
         # Material stamping is intentionally followed by the surface-map pass:
         # otherwise a twisted straight wall previews correctly but loses its
         # continuous UV map when the command is committed.
         finalize_wall_surface_maps(children, p, path, smooth_path=(kind == "arc"))
+        stamp_wall_edge_finishes(temp, scene, p)
         ext = copy.deepcopy(group.ext)
-        ext[KEY] = record(p, path, path_record=path_record)
-        ext.pop(DERIVED_KEY, None)
+        ext[KEY] = record(p, path, caps=caps, path_record=path_record)
+        if not safe_derived:
+            ext.pop(DERIVED_KEY, None)
         self.group = group
         self.before = (list(group.children), copy.deepcopy(group.ext), QMatrix4x4(group.xform))
         self.after = (children, ext, edit_placement(group, p["base"]))
@@ -160,6 +302,11 @@ class EditWall(Command):
         self.group.ext = copy.deepcopy(ext)
         self.group.xform = QMatrix4x4(transform)
         scene.version += 1
+        # The host is authoritative: resolve dependent meshes in the same
+        # undo/redo operation, not eventually through a viewport refresh.
+        from .door_window_commands import sync_hosted_fill_placements
+        if sync_hosted_fill_placements(scene, host_id=self.group.uid):
+            scene.version += 1
 
     def do(self, scene):
         self._apply(scene, self.after)
@@ -179,6 +326,9 @@ class EditWallPath(Command):
         p["length"] = path_length(path)
         p = validate(p)
         children = build_children(p, previous_children=group.children, path=path)
+        if p.get("edge_materials"):
+            holder = type("_WallEdges", (), {"children": children})()
+            stamp_wall_edge_finishes(holder, scene, p)
         ext = copy.deepcopy(group.ext)
         ext[KEY] = record(p, path)
         ext.pop(DERIVED_KEY, None)
@@ -237,6 +387,9 @@ class SetWallArc(Command):
         values["length"] = path_length_from_record({"path": path_rec})
         children = build_children(values, previous_children=group.children, path=samples,
                                   smooth_path=(path_rec.get("type") == "arc"))
+        if values.get("edge_materials"):
+            holder = type("_WallEdges", (), {"children": children})()
+            stamp_wall_edge_finishes(holder, scene, values)
         ext = copy.deepcopy(group.ext)
         ext[KEY] = record(values, samples, path_record=path_rec)
         ext.pop(DERIVED_KEY, None)
@@ -491,3 +644,59 @@ class ReplaceArcWallWithArcs(Command):
             if g in scene.groups:scene.groups.remove(g)
         if self.group not in scene.groups:scene.groups.insert(min(self.index,len(scene.groups)),self.group)
         scene.selection.clear();scene.selection.add(self.group);scene.version+=1
+
+
+class PaintWallEdgeFinishes(Command):
+    """Undoable cosmetic edge painting with no wall geometry regeneration."""
+    def __init__(self, scene, group, finishes):
+        root_edit_allowed(scene)
+        if group not in scene.groups or not scene.entity_selectable(group):
+            raise WallError("Select an editable wall to paint its edges.")
+        rec = wall_record(group)
+        if rec is None:
+            raise WallError("Not a parametric wall.")
+        self.group = group
+        self.before_data = copy.deepcopy(rec.get("edge_materials", {}))
+        self.after_data = normalize_edge_finishes(finishes)
+        from .wall_edge_finishes import face_material_assignments
+        values = read_wall(group)
+        self.before_attrs = [(face, copy.deepcopy(face.attrs)) for face, _ov, _base
+                             in face_material_assignments(group, values)]
+        self.after_attrs = None
+
+    def _restore(self, scene, settings, attrs):
+        self.group.ext[KEY]["edge_materials"] = copy.deepcopy(settings)
+        for face, appearance in attrs:
+            face.attrs.clear()
+            face.attrs.update(copy.deepcopy(appearance))
+        # A scene.version bump on its own will not rebuild the host's
+        # per-mesh VBO after a face-attrs-only undo/redo.
+        from .wall_edge_finishes import invalidate_wall_face_appearance
+        invalidate_wall_face_appearance(self.group)
+        scene.version += 1
+
+    def do(self, scene):
+        if self.after_attrs is not None:
+            self._restore(scene, self.after_data, self.after_attrs)
+            return
+        # Preflight the real native material before writing project metadata.
+        # An unresolved material is a visible error, never a silent no-op.
+        from .wall_edge_finishes import validate_edge_materials, face_material_assignments
+        try:
+            validate_edge_materials(scene, self.after_data)
+        except ValueError as exc:
+            raise WallError(str(exc)) from exc
+        if self.after_data and not any(face_material_assignments(
+                self.group, read_wall(self.group))):
+            raise WallError("No paintable wall end/top/bottom faces were found.")
+        rec = self.group.ext[KEY]
+        rec["edge_materials"] = copy.deepcopy(self.after_data)
+        values = read_wall(self.group)
+        from .wall_edge_finishes import stamp_wall_edge_finishes
+        stamp_wall_edge_finishes(self.group, scene, values, restore_defaults=True)
+        self.after_attrs = [(face, copy.deepcopy(face.attrs))
+                            for face, _attrs in self.before_attrs]
+        scene.version += 1
+
+    def undo(self, scene):
+        self._restore(scene, self.before_data, self.before_attrs)

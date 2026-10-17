@@ -59,6 +59,19 @@ def _domains():
         return {}
 
 
+def entity_catalog() -> dict:
+    """Complete bundled IFC4 schema entity catalogue (not an ABNT/Uniclass catalogue)."""
+    return _entities().copy()
+
+
+def default_internal_classification(ifc_class: str) -> dict:
+    """IFC entity identification; *not* a national construction classification."""
+    cls = str(ifc_class or "").strip()
+    return {"system": "OpenTrace BIM / IFC4", "code": cls,
+            "description": str(entity_info(cls).get("description") or ""),
+            "source": "IFC4"}
+
+
 def entity_info(ifc_class: str) -> dict:
     return dict(_entities().get(str(ifc_class), {}) or {})
 

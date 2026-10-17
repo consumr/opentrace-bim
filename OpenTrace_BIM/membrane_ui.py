@@ -133,8 +133,7 @@ class MembraneController:
         lay.setContentsMargins(8, 8, 8, 8)
         lay.setSpacing(8)
         title = QLabel(
-            "<b style='font-size:14pt'>Membrana</b><br>"
-            "<span style='color:#777'>Superfície arquitetônica deformável; o contorno é a geometria de controle.</span>"
+            "<b style='font-size:14pt'>Membrane</b><br><span style='color:#777'>Deformable architectural surface; the boundary is the control geometry.</span>"
         )
         title.setWordWrap(True)
         lay.addWidget(title)
@@ -155,7 +154,7 @@ class MembraneController:
         lay.addLayout(form)
         self.mode = QComboBox()
         self.mode.addItem("Malha / smooth", "relaxed")
-        self.mode.setToolTip("Superfície de controle: as bordas definem a forma e a pele interpola entre elas.")
+        self.mode.setToolTip('Control surface: the boundaries define the shape and the skin interpolates between them.')
         form.addRow("Comportamento", self.mode)
         self.div = QSpinBox()
         self.div.setRange(2, 20)
@@ -166,8 +165,8 @@ class MembraneController:
         self.tension.setDecimals(0); self.tension.setRange(0.0, 100.0); self.tension.setValue(0.0)
         self.tension.hide()  # compatibility field for old records; no solver in 0.12.7
         self.structure = QComboBox()
-        self.structure.addItem("Superfície simples", "simple")
-        self.structure.addItem("Composta / camadas", "composite")
+        self.structure.addItem('Single surface', "simple")
+        self.structure.addItem('Composite / layers', "composite")
         form.addRow("Estrutura", self.structure)
         self.thickness = QDoubleSpinBox()
         self.thickness.setDecimals(4)
@@ -180,8 +179,7 @@ class MembraneController:
         self.layer_editor = LayerEditor(w, before_label="Lado A", after_label="Lado B")
         lay.addWidget(self.layer_editor)
         self.hint = QLabel(
-            "A membrana nasce ao fechar o contorno. Selecione-a para ver a gaiola; ✥ entra na edição. "
-            "As bordas azuis são a geometria de controle. Curvas H/V pertencem à própria borda e a pele permanece colada nelas."
+            'The membrane is created when the boundary closes. Select it to see the cage; ✥ enters edit mode. Blue boundaries are the control geometry. H/V curves belong to the boundary itself and the skin remains attached to them.'
         )
         self.hint.setWordWrap(True)
         self.hint.setStyleSheet("color:#666;")
@@ -296,7 +294,7 @@ class MembraneController:
     def message(self, text, error=False):
         self.feedback.setText(str(text))
         self.feedback.setStyleSheet("color:#b00020;" if error else "")
-        try: self.app.viewport.flash_status(str(text), 8000 if error else 15000)
+        try: self.app.viewport.flash_status(str(text), 15000)
         except Exception: pass
 
     def _selected_membrane(self):
