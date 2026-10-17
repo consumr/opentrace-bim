@@ -1,0 +1,39 @@
+name: QA OpenTrace v0.42.1 updater
+on:
+  push:
+    branches:
+      - fix/updater-github-releases-v0.42.1
+    paths:
+      - .github/workflows/qa-updater-v0421.yml
+permissions:
+  contents: write
+jobs:
+  qa:
+    if: github.repository == 'lelopes05/opentrace-bim'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/updater-github-releases-v0.42.1
+          persist-credentials: true
+      - name: Offline unit tests and complete Python syntax validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p test_updater_release_feed.py -v
+          python3 - <<'PY'
+          from pathlib import Path
+          files = sorted(Path('OpenTrace_BIM').rglob('*.py'))
+          assert len(files) >= 80, len(files)
+          for f in files:
+              compile(f.read_bytes(), str(f), 'exec')
+          init = Path('OpenTrace_BIM/__init__.py').read_text()
+          assert '__version__ = "0.42.1"' in init
+          updater = Path('OpenTrace_BIM/updater.py').read_text()
+          assert 'ingelibre/ingetrazo-extensions' not in updater
+          print('PASS:', len(files), 'plugin modules compile')
+          PY
+          printf '# v0.42.1 updater verification\n\nOffline regression tests passed; Python package modules compile; GitHub-direct update feed configured.\n' > docs/releases/v0.42.1/QA_RESULT.md
+          git add docs/releases/v0.42.1/QA_RESULT.md
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Record passed v0.42.1 updater verification'
+          git push origin HEAD:refs/heads/fix/updater-github-releases-v0.42.1
