@@ -1,0 +1,64 @@
+name: Import exact published OpenTrace v0.44.0 ZIP source
+on:
+  push:
+    branches:
+      - sync/published-v0.44.0-source
+    paths:
+      - .github/workflows/import-published-v044.yml
+permissions:
+  contents: write
+jobs:
+  import-source:
+    if: github.repository == 'lelopes05/opentrace-bim'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout isolated sync branch
+        uses: actions/checkout@v4
+        with:
+          ref: sync/published-v0.44.0-source
+          persist-credentials: true
+      - name: Download the exact ZIP the user attached to the published Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/released"
+          gh release download v0.44.0 --repo lelopes05/opentrace-bim --pattern 'OpenTrace_BIM-v0.44.0.zip' --dir "$RUNNER_TEMP/released"
+          RELEASE_ZIP="$RUNNER_TEMP/released/OpenTrace_BIM-v0.44.0.zip"
+          printf '%s  %s\n' 'b03455f4c24b95592e4ce671bdb85eb60e06bff02a617bcc497d8697fa40a937' "$RELEASE_ZIP" | sha256sum --check --status
+          python3 - "$RELEASE_ZIP" "$RUNNER_TEMP/released/extracted" <<'PY'
+          import hashlib, pathlib, sys, zipfile, re
+          archive=pathlib.Path(sys.argv[1])
+          target=pathlib.Path(sys.argv[2])
+          target.mkdir(parents=True)
+          with zipfile.ZipFile(archive) as z:
+              members=z.infolist()
+              assert len(members)==181, len(members)
+              for info in members:
+                  p=pathlib.PurePosixPath(info.filename)
+                  assert len(p.parts)>=2 and p.parts[0]=='OpenTrace_BIM'
+                  assert '..' not in p.parts and not info.filename.startswith('/')
+                  assert not ((info.external_attr>>16) & 0o170000)==0o120000
+              assert z.testzip() is None
+              assert b'__version__ = "0.44.0"' in z.read('OpenTrace_BIM/__init__.py')
+              home=z.read('OpenTrace_BIM/suite_panel.py')
+              updater=z.read('OpenTrace_BIM/updater.py')
+              assert b'self.update_manager.check(manual=True)' in home
+              assert b'self.update_button.setEnabled(False)' not in home
+              assert b'api.github.com/repos/lelopes05/opentrace-bim/releases' in updater
+              assert b'ingelibre/ingetrazo-extensions' not in updater
+              for line in z.read('OpenTrace_BIM/PACKAGE_MANIFEST.txt').decode().splitlines():
+                  digest,rel=line.split('  ',1)
+                  assert hashlib.sha256(z.read('OpenTrace_BIM/'+rel)).hexdigest()==digest,rel
+              for info in members:
+                  if info.filename.endswith('.py'):
+                      compile(z.read(info.filename),info.filename,'exec')
+              z.extractall(target)
+          print('Verified exact published ZIP, manifests, button wiring and Python syntax')
+          PY
+          rsync -a --delete "$RUNNER_TEMP/released/extracted/OpenTrace_BIM/" OpenTrace_BIM/
+          git add -A OpenTrace_BIM
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Sync OpenTrace BIM source exactly to published v0.44.0 ZIP'
+          git push origin HEAD:refs/heads/sync/published-v0.44.0-source
+          echo 'Source sync committed to isolated PR branch. main and tag unchanged.'
