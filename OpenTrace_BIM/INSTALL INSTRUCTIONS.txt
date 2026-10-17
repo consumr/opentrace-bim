@@ -1,4 +1,4 @@
-OpenTrace BIM v0.42.0 — release candidate
+OpenTrace BIM v0.42.0 — Alpha
 INSTALLATION / INSTALLAÇÃO — MANUAL ONLY
 
 ENGLISH
@@ -24,4 +24,4 @@ Cierre IngeTrazo y guarde una copia de seguridad fuera de plugins. Abra Extensio
 DEUTSCH
 Schließen Sie IngeTrazo und sichern Sie den bisherigen Ordner außerhalb von plugins. Öffnen Sie Extensions > Open plugins folder, ersetzen Sie den gesamten Ordner OpenTrace_BIM und starten Sie neu. Prüfen Sie OpenTrace_BIM/__init__.py ohne doppelte Ordner. Zuerst mit einer Testdatei prüfen.
 
-No automatic .bat/.py installer is bundled in this candidate. Old documentation inside archived handoff files is historical and may describe superseded behaviors.
+No automatic .bat/.py installer is bundled in this Alpha release. Old documentation inside archived handoff files is historical and may describe superseded behaviors.
