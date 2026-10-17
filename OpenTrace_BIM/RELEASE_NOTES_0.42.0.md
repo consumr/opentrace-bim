@@ -1,6 +1,6 @@
-# OpenTrace BIM 0.42.0 — Release Candidate
+# OpenTrace BIM 0.42.0 — Alpha
 
-**Prepared:** 16 October 2026 · **Status:** release candidate / Windows QA pending. This consolidated candidate was assigned release version 0.42.0; the local experimental source identified itself internally as 0.12.9. This is not a verified diff against the latest GitHub 0.41.x release, nor a verified stable release. Target host: IngeTrazo 0.5.7+; GPL-3.0-or-later.
+**Prepared:** 16 October 2026 · **Status:** official Alpha release; tested and approved by the maintainer in Windows/IngeTrazo. The consolidated source was assigned version 0.42.0; the originating experimental source identified itself internally as 0.12.9. This is not a verified diff against an intervening GitHub 0.41.x release, nor a claim of stable software. Target host: IngeTrazo 0.5.7+; GPL-3.0-or-later.
 
 ## Highlights
 
@@ -13,7 +13,7 @@
 
 ## Important compatibility and limitations
 
-- **Windows acceptance is not complete.** Python tests cannot certify mouse interactions, GPU rendering, real host command/history, `.igz` reopens or IFC use in Archicad/Revit/Bonsai/FreeCAD.
+- **Windows/IngeTrazo functional acceptance was completed by the maintainer.** Automated Python tests alone cannot independently certify mouse interactions, GPU rendering, all host command/history cases, `.igz` reopens or IFC use in Archicad/Revit/Bonsai/FreeCAD.
 - The new pocket sliding assembly is experimental (wall composites, offsets, quantities and IFC require real-model validation). Historic pocket geometries are not auto-migrated.
 - A full new parametric **window engine was not implemented**: existing window flow and optional V9.1 visual composition were preserved.
 - Traditional groove relief uses shallow face-applied features, not boolean-cut grooves with configurable depth.
@@ -26,8 +26,8 @@
 
 ## Release gate
 
-Before marking GitHub release as stable: complete `QA_WINDOWS_0.42.0.md` in the accompanying handoff ZIP; test against a backed-up copy of both new and existing `.igz` projects, and validate representative exports externally. Until then use GitHub **Pre-release**, if publication is explicitly approved.
+The v0.42.0 release is an approved Alpha, not a release candidate or a stable release. For future stable status, complete extended Windows and IFC interoperability checks, using backed-up `.igz` projects and representative external exports.
 
 ## Provenance
 
-This candidate uses the complete uploaded isolated fix-check-box ZIP from 16 October 2026. It retains the merged walls/IFC/doors baseline and the final checkbox correction. The original merge and experimental reports are retained as historical records and may contain statements superseded by later fixes.
+This Alpha release uses the complete uploaded isolated fix-check-box ZIP from 16 October 2026. It retains the merged walls/IFC/doors baseline and the final checkbox correction. The original merge and experimental reports are retained as historical records and may contain statements superseded by later fixes.
