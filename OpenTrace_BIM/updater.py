@@ -216,13 +216,19 @@ def _install_package(data: bytes, expected_version: str, expected_sha: str):
             old_manifest_path = current_dir / "PACKAGE_MANIFEST.txt"
             old_owned = set()
             if old_manifest_path.is_file():
-                old_owned = {
-                    line.strip()
-                    for line in old_manifest_path.read_text(
-                        encoding="utf-8"
-                    ).splitlines()
-                    if line.strip()
-                }
+                # The package manifest stores "sha256  relative/path",
+                # not bare filenames. Earlier updaters could not identify
+                # removed package-owned files because they kept the hash.
+                for line in old_manifest_path.read_text(
+                    encoding="utf-8"
+                ).splitlines():
+                    match = re.fullmatch(r"[a-fA-F0-9]{64}  (.+)", line.strip())
+                    if match is None:
+                        continue
+                    rel = Path(match.group(1))
+                    if rel.is_absolute() or ".." in rel.parts:
+                        continue
+                    old_owned.add(rel.as_posix())
 
             backup_files = {
                 p.relative_to(backup).as_posix()
