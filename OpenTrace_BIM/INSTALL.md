@@ -1,4 +1,4 @@
-# Installing OpenTrace BIM 0.42.1 — Alpha
+# Installing OpenTrace BIM 0.42.2 — Alpha
 
 **Host:** IngeTrazo 0.5.7+ (target; verify the installed host build). This Alpha release was functionally tested and approved by the maintainer on Windows/IngeTrazo; wider compatibility testing continues.
 
@@ -10,4 +10,4 @@
 
 **Important:** This ZIP does not include `INSTALL_OPENTRACE_BIM.bat` or `INSTALL_OPENTRACE_BIM.py`. The one-click instructions in earlier historical packages therefore do not apply. Do not place backup directories named `OpenTrace_BIM_backup_*` inside IngeTrazo's scanned `plugins` folder; use a directory outside it.
 
-In v0.42.1 and later, the updater directly checks the official OpenTrace BIM GitHub Releases feed. Users on v0.42.0 and earlier still need one update via IngeTrazo's external catalogue (or a manual installation), because their installed code has the former updater.
+In v0.42.2 and later, the updater directly checks the official OpenTrace BIM GitHub Releases feed. Users on v0.42.0–0.42.1 must install this fixed release manually because the Home update controls in those versions were disabled. The v0.12.9 updater uses the external IngeTrazo catalogue.
