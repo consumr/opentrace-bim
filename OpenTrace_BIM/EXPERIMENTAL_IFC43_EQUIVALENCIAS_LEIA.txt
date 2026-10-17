@@ -1,0 +1,62 @@
+OPENTRACE BIM — EXPERIMENTAL ISOLADO — IFC4.3 + EQUIVALÊNCIAS
+Data: 14/10/2026
+NÃO OFICIAL. NÃO MESCLAR. NÃO PUBLICAR. NÃO SINCRONIZAR.
+Nenhum documento ou repositório externo foi modificado nesta entrega.
+Tudo contido neste ZIP é exclusivamente experimental.
+
+BASE
+- Merge experimental 410+420 com IFC/layers/migração já existente.
+- Perfis Archicad, Revit, Bonsai e OpenTrace preservados.
+- Importador IFC anterior não foi ampliado nem reconstruído.
+
+RECURSOS DESTE EXPERIMENTO
+1. IFC4.3 ADD2 é uma seleção separada na seção BIM / IFC e no projeto novo.
+   O arquivo STEP recebe schema IFC4X3_ADD2. IFC4 continua padrão.
+   Foram testadas exportações geradas pelo próprio exportador para ambos.
+   ATENÇÃO: NÃO houve validação independente usando IfcOpenShell nem abertura
+   em Archicad/Revit/Bonsai/FreeCAD. IFC4.3 está em teste. Os metadados
+   de entidades e propriedades incorporados ainda são IFC4; a atualização
+   completa de catálogo de entidades/propriedades IFC4.3 NÃO foi feita.
+2. O projeto novo admite template, versão IFC, múltiplos catálogos de
+   classificação e catálogos de equivalências de forma independente.
+   Escolhe-se qual classificação será principal. As escolhas ficam no .igz.
+3. Novos elementos podem receber referências de VÁRIOS sistemas simultâneos,
+   desde que cada sistema tenha exatamente um código explicitamente aplicável
+   à classe IFC do elemento. Em caso ambíguo, não há atribuição por adivinhação.
+4. Em BIM -> Migrar catálogo IFC há importação opcional de catálogos de
+   equivalências em CSV/JSON. Cada relação contém sistema, código, direção,
+   tipo (exact/similar/broader/narrower/related), fonte e revisão. Apenas
+   correspondências exact, explicitamente revisadas e sem concorrentes são
+   propostas automaticamente. O usuário sempre confirma antes da migração.
+5. Catálogos de equivalências ficam registrados e versionados no projeto.
+   A geometria, identidades, layers, Psets e favoritos não são alterados.
+6. Foi incluída classification_crosswalks/table_families.json com 6 famílias
+   entre as TABELAS Uniclass / OmniClass / ABNT NBR 15965. Isso NÃO contém
+   equivalências entre códigos de itens individuais (não verificadas), e
+   NÃO serve para migração automática. Inclui moldes CSV/JSON para catálogos
+   posteriores, com a fonte de cada sistema. MasterFormat e CoClass também
+   constam no registro de sistemas extensíveis.
+
+LIMITAÇÕES NÃO RESOLVIDAS
+- Nenhuma tabela de códigos oficial completa ABNT, OmniClass ou Uniclass
+  foi embutida ou obtida nesta revisão; elas devem vir de fonte autorizada.
+- NENHUMA equivalência normativa código-a-código foi homologada. Não substituir
+  um código nacional por outro apenas pelo nome ou pela entidade IFC.
+- Schemas/psets IFC4.3 completos, validação de conformidade externa, execução
+  do host Windows e teste de perfis específicos estão pendentes.
+- A interpretação de 'verified' é afirmação do editor do catálogo de relações;
+  não equivale a certificação pelo OpenTrace nem por órgão normativo.
+
+FONTE TÉCNICA PÚBLICA
+- IFC4.3 ADD2 buildingSMART: https://technical.buildingsmart.org/standards/ifc/ifc-schema-specifications/
+- bSDD/classification: https://technical.buildingsmart.org/services/bsdd/referencing-bsdd-in-ids-and-ifc/
+- Relações bSDD: https://technical.buildingsmart.org/services/bsdd/data-structure/
+- Uniclass: https://uniclass.thenbs.com/download
+- OmniClass: https://www.csiresources.org/standards/omniclass/standards-omniclass-about
+- ABNT via SICLIC FAU-USP: https://siclic.fau.usp.br/busca
+
+VALIDAÇÃO INTERNA
+- 23 testes automatizados, incluindo 13 testes de regressão, lógica nova de
+  equivalências, persistência e duas exportações IFC sintéticas.
+- Compilação dos módulos Python e integridade do ZIP.
+- Teste de interface e validação formal em Windows PENDENTES.

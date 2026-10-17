@@ -312,7 +312,7 @@ class WallPresetPanel(QFrame):
         layout.setContentsMargins(0, 4, 0, 4)
         layout.setSpacing(4)
 
-        title = QLabel("Presets de parede")
+        title = QLabel('Presets de wall')
         title.setStyleSheet("font-weight: bold;")
         layout.addWidget(title)
 
@@ -321,8 +321,8 @@ class WallPresetPanel(QFrame):
         layout.addWidget(self.combo)
 
         row = QHBoxLayout()
-        self.apply_btn = QPushButton("Aplicar")
-        self.save_btn = QPushButton("Salvar")
+        self.apply_btn = QPushButton('Apply')
+        self.save_btn = QPushButton('Save')
         self.rename_btn = QPushButton("Renomear")
         row.addWidget(self.apply_btn)
         row.addWidget(self.save_btn)
@@ -388,7 +388,7 @@ class WallPresetPanel(QFrame):
 
     def save_current(self):
         name, ok = QInputDialog.getText(
-            self, "Salvar preset de parede", "Nome do preset:"
+            self, 'Save preset de wall', 'Preset name:'
         )
         if not ok:
             return
@@ -452,7 +452,7 @@ class WallPresetPanel(QFrame):
         name, ok = QInputDialog.getText(
             self,
             "Renomear preset",
-            "Novo nome:",
+            'New name:',
             text=preset["name"],
         )
         if not ok:
@@ -466,7 +466,7 @@ class WallPresetPanel(QFrame):
         if collision is not None:
             QMessageBox.warning(
                 self,
-                "Nome já utilizado",
+                'Name already in use',
                 f"Já existe um preset chamado '{collision['name']}'.",
             )
             return

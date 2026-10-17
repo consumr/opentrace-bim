@@ -18,7 +18,8 @@ import json
 import uuid
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QTimer, Qt
+from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -519,7 +520,7 @@ class TemplateDialog(QDialog):
     def __init__(self, controller, parent=None):
         super().__init__(parent or controller.app.window)
         self.controller = controller
-        self.setWindowTitle("Templates de Camadas e Combinações")
+        self.setWindowTitle('Layer & Combination Templates')
         self.resize(760, 470)
         self._build()
         self.refresh()
@@ -531,7 +532,7 @@ class TemplateDialog(QDialog):
         root.setSpacing(8)
 
         root.addWidget(QLabel(
-            "<b>Templates de Camadas e Combinações</b><br>"
+            "<b>Templates de Camadas e Combinations</b><br>"
             "<span style='color:gray'>Os templates pessoais ficam disponíveis "
             "em todos os projetos deste computador e também podem ser "
             "exportados para arquivo.</span>"
@@ -547,8 +548,8 @@ class TemplateDialog(QDialog):
         root.addWidget(self.description)
 
         row1 = QHBoxLayout()
-        self.apply_btn = QPushButton("Aplicar ao projeto")
-        self.save_btn = QPushButton("Salvar projeto como template…")
+        self.apply_btn = QPushButton('Apply to project')
+        self.save_btn = QPushButton('Save project as template…')
         self.export_btn = QPushButton("Exportar…")
         self.import_btn = QPushButton("Importar…")
         for b in (self.apply_btn, self.save_btn, self.export_btn, self.import_btn):
@@ -618,11 +619,8 @@ class TemplateDialog(QDialog):
         if not tpl:
             return
         answer = QMessageBox.question(
-            self, "Aplicar template",
-            "O template criará as camadas que ainda não existem e substituirá "
-            "a organização de pastas e as combinações deste plugin.\n\n"
-            "Camadas já existentes e geometria do projeto não serão apagadas.\n\n"
-            "Aplicar?"
+            self, 'Apply template',
+            "The template will create missing layers and replace this plugin's folder organisation and combinations.\n\nExisting layers and project geometry will not be deleted.\n\nApply?"
         )
         if answer != QMessageBox.Yes:
             return
@@ -634,7 +632,7 @@ class TemplateDialog(QDialog):
 
     def _save_current(self):
         name, ok = QInputDialog.getText(
-            self, "Salvar template pessoal", "Nome do template:"
+            self, 'Save personal template', 'Template name:'
         )
         name = _clean_name(name)
         if not ok or not name:
@@ -780,7 +778,7 @@ class ViewportCombinationBar:
             }
         """)
 
-        self.label = QLabel("Combinação de Camadas:")
+        self.label = QLabel('Layer Combinations:')
         self.toolbar.addWidget(self.label)
 
         self.combo = QComboBox()
@@ -791,9 +789,21 @@ class ViewportCombinationBar:
 
         self.manage = QToolButton()
         self.manage.setText("⚙")
-        self.manage.setToolTip("Gerenciar combinações de camadas")
+        self.manage.setToolTip('Manage layer combinations')
         self.manage.clicked.connect(controller.show)
         self.toolbar.addWidget(self.manage)
+
+        # The combination picker changes visible/locked layer STATES. It is
+        # intentionally separate from picking an individual model layer.
+        self.layer_label = QLabel('Layer:')
+        self.toolbar.addWidget(self.layer_label)
+        self.layer_choice = QComboBox()
+        self.layer_choice.setObjectName('opentrace_individual_layer_picker')
+        self.layer_choice.setMinimumWidth(155)
+        self.layer_choice.setMaximumWidth(280)
+        self.layer_choice.setToolTip('Layer for new objects or current selection (does not change combinations)')
+        self.layer_choice.activated.connect(self._select_layer)
+        self.toolbar.addWidget(self.layer_choice)
 
         win.addToolBar(Qt.BottomToolBarArea, self.toolbar)
         self.refresh()
@@ -821,8 +831,53 @@ class ViewportCombinationBar:
             elif self.combo.count():
                 self.combo.setCurrentIndex(-1)
                 self.combo.setPlaceholderText("Estado atual")
+            from core.layers import DEFAULT_LAYER, layer_of
+            from ..creation_properties import creation_defaults
+            from ..object_properties import creation_kind, selected_entities
+            scene = self.controller.app.scene
+            kind = creation_kind(self.controller.app)
+            entities = [] if kind else selected_entities(scene)
+            selected = {layer_of(e) for e in entities}
+            current = (creation_defaults(scene).get(kind, {}).get('layer',
+                       getattr(scene, '_opentrace_active_layer', DEFAULT_LAYER)) if kind else
+                       next(iter(selected)) if len(selected) == 1 else
+                       getattr(scene, '_opentrace_active_layer', DEFAULT_LAYER))
+            self.layer_choice.clear()
+            for layer in scene.layers:
+                self.layer_choice.addItem(layer.name, layer.name)
+            index = self.layer_choice.findData(current)
+            self.layer_choice.setCurrentIndex(index if index >= 0 else -1)
         finally:
             self._updating = False
+
+    def _select_layer(self, index):
+        if self._updating or index < 0:
+            return
+        name = self.layer_choice.itemData(index)
+        app = self.controller.app
+        scene = app.scene
+        if not name or scene.layer(name) is None or scene.edit_group is not None:
+            return
+        from ..object_properties import creation_kind, selected_entities
+        from ..creation_properties import creation_defaults
+        kind = creation_kind(app)
+        if kind:
+            creation_defaults(scene).setdefault(kind, {})['layer'] = name
+        else:
+            entities = selected_entities(scene)
+            if entities:
+                if not all(scene.entity_selectable(ent) for ent in entities):
+                    return
+                from core.history import AssignLayerCommand
+                app.viewport.history.execute(AssignLayerCommand(entities, name))
+                app.viewport.notify_scene_changed()
+            else:
+                scene._opentrace_active_layer = name
+        suite = getattr(app.window, '_arquitetura_parametrica_suite_panel', None)
+        if suite is not None:
+            suite.object_properties.refresh()
+        self.refresh()
+        app.viewport.setFocus()
 
     def _selected(self, index):
         if self._updating or index < 0:
@@ -839,8 +894,9 @@ class InitialTemplateDialog(QDialog):
         super().__init__(controller.app.window)
         self.controller = controller
         self.choice = None
-        self.setWindowTitle("Escolher Template de Camadas")
-        self.setModal(True)
+        self.setWindowTitle('Choose Layer Template')
+        self.setModal(False)
+        self.setWindowModality(Qt.NonModal)
         self.resize(520, 330)
 
         root = QVBoxLayout(self)
@@ -848,9 +904,9 @@ class InitialTemplateDialog(QDialog):
         root.setSpacing(8)
 
         title = QLabel(
-            "<b>Como este projeto deve começar?</b><br>"
-            "<span style='color:gray'>Escolha um template de camadas e "
-            "combinações. Esta escolha vale apenas para este projeto.</span>"
+            "<b>How should this project begin?</b><br>"
+            "<span style='color:gray'>Choose a layer and combination template. "
+            "This choice applies only to this project.</span>"
         )
         title.setWordWrap(True)
         root.addWidget(title)
@@ -865,7 +921,7 @@ class InitialTemplateDialog(QDialog):
 
         row = QHBoxLayout()
         row.addStretch(1)
-        self.cancel_btn = QPushButton("Começar vazio")
+        self.cancel_btn = QPushButton('Start empty')
         self.apply_btn = QPushButton("Usar template")
         self.apply_btn.setDefault(True)
         row.addWidget(self.cancel_btn)
@@ -929,7 +985,7 @@ class ManagerDialog(QDialog):
     def __init__(self, controller):
         super().__init__(controller.app.window)
         self.controller = controller
-        self.setWindowTitle("Combinação de Camadas")
+        self.setWindowTitle('Layer Combinations')
         self.setModal(False)
         self.resize(1080, 680)
         self.setMinimumSize(820, 520)
@@ -946,8 +1002,7 @@ class ManagerDialog(QDialog):
         root.setSpacing(8)
 
         title = QLabel(
-            "<b>Combinação de Camadas</b> — visibilidade, bloqueio e grupo "
-            "de interseção por combinação"
+            '<b>Layer Combinations</b> — visibility, locking and intersection group per combination'
         )
         root.addWidget(title)
 
@@ -958,7 +1013,7 @@ class ManagerDialog(QDialog):
         left = QWidget()
         ll = QVBoxLayout(left)
         ll.setContentsMargins(0, 0, 6, 0)
-        ll.addWidget(QLabel("<b>Combinações</b>"))
+        ll.addWidget(QLabel("<b>Combinations</b>"))
 
         self.combo_list = QListWidget()
         self.combo_list.currentItemChanged.connect(self._combo_selected)
@@ -973,7 +1028,7 @@ class ManagerDialog(QDialog):
             combo_buttons.addWidget(b)
         ll.addLayout(combo_buttons)
 
-        self.combo_apply = QPushButton("Aplicar combinação")
+        self.combo_apply = QPushButton('Apply combination')
         self.combo_update = QPushButton("Atualizar pelo estado atual")
         self.templates_btn = QPushButton("Templates…")
         ll.addWidget(self.combo_apply)
@@ -997,10 +1052,10 @@ class ManagerDialog(QDialog):
         rl.setSpacing(6)
 
         head = QHBoxLayout()
-        head.addWidget(QLabel("<b>Camadas</b>"))
+        head.addWidget(QLabel('<b>Layers</b>'))
         head.addStretch(1)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Procurar camadas")
+        self.search.setPlaceholderText('Procurar layers')
         self.search.textChanged.connect(self._refresh_layers)
         head.addWidget(self.search, 1)
         rl.addLayout(head)
@@ -1057,7 +1112,7 @@ class ManagerDialog(QDialog):
         tbl.addWidget(self.layers, 1)
 
         lbuttons = QHBoxLayout()
-        self.layer_new = QPushButton("+ Camada")
+        self.layer_new = QPushButton('+ Layer')
         self.layer_ren = QPushButton("Renomear")
         self.layer_del = QPushButton("Excluir")
         self.layer_move = QPushButton("Mover para pasta…")
@@ -1118,7 +1173,7 @@ class ManagerDialog(QDialog):
             self.controller.data.get("applied_id")
         )
         if not applied:
-            self.status.setText("Nenhuma combinação aplicada.")
+            self.status.setText("No combination applied.")
             return
         suffix = (
             " — modificado no modelo"
@@ -1225,8 +1280,8 @@ class ManagerDialog(QDialog):
                 spin.setRange(0, 999)
                 spin.setValue(int(st.get("intersection_group", 1)))
                 spin.setToolTip(
-                    "0 = não participa de interseções automáticas.\n"
-                    "Elementos em camadas com o mesmo número podem interagir."
+                    "0 = does not participate in automatic intersections.\n"
+                    "Elements on layers with the same number may interact."
                 )
                 spin.valueChanged.connect(
                     lambda value, name=ly.name: self._intersection_changed(
@@ -1260,13 +1315,13 @@ class ManagerDialog(QDialog):
     # ---------------------------------------------------------- combinations
     def _new_combo(self):
         name, ok = QInputDialog.getText(
-            self, "Nova combinação", "Nome da combinação:"
+            self, 'New combination', "Combination name:"
         )
         name = _clean_name(name)
         if not ok or not name:
             return
         if self.controller.combo_name_exists(name):
-            QMessageBox.warning(self, "Combinações", "Esse nome já existe.")
+            QMessageBox.warning(self, "Combinations", "That name already exists.")
             return
         combo = self.controller.snapshot_combo(name)
         self.controller.data["combinations"].append(combo)
@@ -1279,13 +1334,13 @@ class ManagerDialog(QDialog):
         if not src:
             return
         name, ok = QInputDialog.getText(
-            self, "Duplicar combinação", "Nome:", text=f"{src['name']} - Cópia"
+            self, 'Duplicate combination', "Nome:", text=f"{src['name']} - Cópia"
         )
         name = _clean_name(name)
         if not ok or not name:
             return
         if self.controller.combo_name_exists(name):
-            QMessageBox.warning(self, "Combinações", "Esse nome já existe.")
+            QMessageBox.warning(self, "Combinations", "That name already exists.")
             return
         dup = copy.deepcopy(src)
         dup["id"] = _uid()
@@ -1300,13 +1355,13 @@ class ManagerDialog(QDialog):
         if not combo:
             return
         name, ok = QInputDialog.getText(
-            self, "Renomear combinação", "Nome:", text=combo["name"]
+            self, "Rename combination", "Nome:", text=combo["name"]
         )
         name = _clean_name(name)
         if not ok or not name or name == combo["name"]:
             return
         if self.controller.combo_name_exists(name, except_id=combo["id"]):
-            QMessageBox.warning(self, "Combinações", "Esse nome já existe.")
+            QMessageBox.warning(self, "Combinations", "That name already exists.")
             return
         combo["name"] = name
         self.controller.save_data()
@@ -1318,11 +1373,11 @@ class ManagerDialog(QDialog):
             return
         if len(self.controller.data["combinations"]) <= 1:
             QMessageBox.information(
-                self, "Combinações", "Mantenha pelo menos uma combinação."
+                self, "Combinations", "Keep at least one combination."
             )
             return
         if QMessageBox.question(
-            self, "Excluir combinação",
+            self, 'Delete combination',
             f"Excluir '{combo['name']}'?"
         ) != QMessageBox.Yes:
             return
@@ -1369,7 +1424,7 @@ class ManagerDialog(QDialog):
             return
         if self.controller.folder_name_exists(name, parent):
             QMessageBox.warning(
-                self, "Pastas", "Já existe uma pasta com esse nome aqui."
+                self, "Pastas", "A folder with that name already exists here."
             )
             return
         folder = {"id": _uid(), "name": name, "parent": parent}
@@ -1393,7 +1448,7 @@ class ManagerDialog(QDialog):
             name, folder.get("parent"), except_id=fid
         ):
             QMessageBox.warning(
-                self, "Pastas", "Já existe uma pasta com esse nome aqui."
+                self, "Pastas", "A folder with that name already exists here."
             )
             return
         folder["name"] = name
@@ -1407,8 +1462,8 @@ class ManagerDialog(QDialog):
             return
         if QMessageBox.question(
             self, "Excluir pasta",
-            "A pasta será removida. As camadas nela ficarão sem pasta.\n"
-            "Subpastas também serão removidas. Continuar?"
+            "The folder will be deleted. Its layers will move out of the folder.\n"
+            "Subfolders will also be removed. Continue?"
         ) != QMessageBox.Yes:
             return
         doomed = self.controller.descendant_folder_ids(fid) | {fid}
@@ -1452,12 +1507,12 @@ class ManagerDialog(QDialog):
         self.controller.save_data()
 
     def _new_layer(self):
-        name, ok = QInputDialog.getText(self, "Nova camada", "Nome da camada:")
+        name, ok = QInputDialog.getText(self, 'Nova layer', "Nome da camada:")
         name = _clean_name(name)
         if not ok or not name:
             return
         if self.controller.scene.layer(name) is not None:
-            QMessageBox.warning(self, "Camadas", "Essa camada já existe.")
+            QMessageBox.warning(self, 'Layers', "That layer already exists.")
             return
         self.controller.add_layer(name, self.current_folder_id())
         self.refresh()
@@ -1469,17 +1524,17 @@ class ManagerDialog(QDialog):
         from core.layers import DEFAULT_LAYER
         if old == DEFAULT_LAYER:
             QMessageBox.information(
-                self, "Camadas", "A camada padrão não pode ser renomeada."
+                self, 'Layers', "The default layer cannot be renamed."
             )
             return
         name, ok = QInputDialog.getText(
-            self, "Renomear camada", "Nome:", text=old
+            self, 'Renomear layer', "Nome:", text=old
         )
         name = _clean_name(name)
         if not ok or not name or name == old:
             return
         if self.controller.scene.layer(name) is not None:
-            QMessageBox.warning(self, "Camadas", "Essa camada já existe.")
+            QMessageBox.warning(self, 'Layers', "That layer already exists.")
             return
         self.controller.rename_layer(old, name)
         self.refresh()
@@ -1491,11 +1546,11 @@ class ManagerDialog(QDialog):
         from core.layers import DEFAULT_LAYER
         if name == DEFAULT_LAYER:
             QMessageBox.information(
-                self, "Camadas", "A camada padrão não pode ser excluída."
+                self, 'Layers', "The default layer cannot be deleted."
             )
             return
         if QMessageBox.question(
-            self, "Excluir camada",
+            self, 'Delete layer',
             f"Excluir '{name}'?\n\nOs elementos serão movidos para "
             f"'{DEFAULT_LAYER}'."
         ) != QMessageBox.Yes:
@@ -1510,7 +1565,7 @@ class ManagerDialog(QDialog):
         folders = self.controller.flat_folder_paths()
         labels = ["Sem pasta"] + [path for _id, path in folders]
         choice, ok = QInputDialog.getItem(
-            self, "Mover camada", f"Pasta para '{name}':",
+            self, 'Mover layer', f"Pasta para '{name}':",
             labels, editable=False
         )
         if not ok:
@@ -1526,6 +1581,34 @@ class ManagerDialog(QDialog):
         self._refresh_layers()
 
 
+
+class _InitialPromptOnViewportPaint(QObject):
+    """One-shot host viewport event: do not prompt during extension setup."""
+
+    def __init__(self, controller):
+        super().__init__(controller.app.viewport)
+        self.controller = controller
+        self.armed = False
+
+    def arm(self):
+        if self.armed:
+            return
+        viewport = self.controller.app.viewport
+        viewport.installEventFilter(self)
+        self.armed = True
+        # A normal viewport paint is the readiness signal, not a timer.
+        viewport.update()
+
+    def eventFilter(self, obj, event):
+        viewport = self.controller.app.viewport
+        if (self.armed and obj is viewport and event.type() == QEvent.Paint
+                and self.controller.app.window.isVisible()):
+            viewport.removeEventFilter(self)
+            self.armed = False
+            self.controller._show_initial_template_prompt()
+        return False
+
+
 class Controller:
     def __init__(self, app):
         self.app = app
@@ -1535,6 +1618,12 @@ class Controller:
         self._saving = False
         self._initial_prompt_pending = False
         self._initial_prompt_running = False
+        self._initial_template_dialog = None
+        # Document identity is NOT the count of changes to plugin_data. Object
+        # creation, layers and undo all emit document-changed notifications.
+        # Once offered, the wizard must not reappear for the same scene.
+        self._initial_prompt_offered_for_scene = None
+        self._suppress_next_native_new_prompt = False
         self.data = self._load_data()
         # IMPORTANT: when this is a brand-new document, do NOT persist the
         # temporary "Modelo 3D" placeholder before the template chooser runs.
@@ -1545,8 +1634,62 @@ class Controller:
         setattr(app.window, "_layer_combinations_service", self.service)
         self.bar = ViewportCombinationBar(self)
         app.on_document_changed(self._document_changed)
+        self._initial_prompt_event = _InitialPromptOnViewportPaint(self)
+        self._connect_native_new_action()
         if self._initial_prompt_pending:
-            QTimer.singleShot(0, self._show_initial_template_prompt)
+            self._initial_prompt_event.arm()
+
+    def _connect_native_new_action(self):
+        """Observe File > New / Ctrl+N without changing host internals.
+
+        IngeTrazo reuses the same Scene for a new file (`scene.clear()`).
+        Scene identity alone can therefore never detect this document boundary.
+        """
+        try:
+            for action in self.app.window.findChildren(QAction):
+                text = str(action.text() or '').replace('&', '').strip().casefold()
+                tip = str(action.statusTip() or '').casefold()
+                shortcut = action.shortcut()
+                new_shortcut = shortcut.matches(QKeySequence(QKeySequence.New)) == QKeySequence.ExactMatch
+                if ('start a new, empty model' in tip or
+                    (new_shortcut and 'window' not in text)):
+                    action.triggered.connect(self._native_new_requested)
+                    self._native_new_action = action
+                    return
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+
+    def _native_new_requested(self, *_):
+        # Host QAction has already run _on_new (or the user cancelled it).
+        # Defer until host document-change callbacks and plugin initialization
+        # settle. An explicit manual wizard suppresses the automatic duplicate.
+        QTimer.singleShot(0, self._after_native_new)
+
+    def _after_native_new(self):
+        if self._suppress_next_native_new_prompt:
+            self._suppress_next_native_new_prompt = False
+            return
+        win = self.app.window
+        if getattr(win, '_current_path', None) is not None:
+            return
+        try:
+            from ..project_setup import should_offer_initial_setup
+            raw = self.app.document_data(default=None)
+            groups = len(getattr(self.app.scene, 'groups', ()) or ())
+            # Native new always starts an untitled blank scene (possibly with
+            # the optional human-scale figure). On host versions that reuse
+            # Scene, the saved-content counters need not match afterwards.
+            clean = groups <= 1
+            if not should_offer_initial_setup(raw, groups, clean_untitled=clean):
+                return
+        except Exception:
+            return
+        # Explicit File > New is a NEW DOCUMENT even when scene is the same
+        # instance as before. Object creation never hits this QAction.
+        self.app.scene._opentrace_native_new_document = True
+        self._initial_prompt_offered_for_scene = None
+        self._initial_prompt_pending = True
+        self._initial_prompt_event.arm()
 
     # --------------------------------------------------------------- document
     def _load_data(self):
@@ -1596,8 +1739,13 @@ class Controller:
         self.scene = self.app.scene
         self.data = self._load_data()
         self.sync_with_scene(save=False)
+        # Re-loading an unconfigured layer namespace after a scene edit must
+        # not reset the startup wizard to 'pending'. The next genuine host
+        # document gets its own scene and is eligible for a new offer.
+        if self._initial_prompt_offered_for_scene is self.scene:
+            self._initial_prompt_pending = False
         if self._initial_prompt_pending and not self._initial_prompt_running:
-            QTimer.singleShot(0, self._show_initial_template_prompt)
+            self._initial_prompt_event.arm()
         if self.dialog is not None:
             try:
                 self.dialog.refresh()
@@ -1826,22 +1974,62 @@ class Controller:
         self._refresh_native_layers()
 
     def _show_initial_template_prompt(self):
+        """One first-run chooser owned by OpenTrace, not the old layers dialog."""
         if not self._initial_prompt_pending or self._initial_prompt_running:
             return
-        self._initial_prompt_running = True
-        try:
-            dlg = InitialTemplateDialog(self)
-            dlg.exec()
-            if dlg.choice is not None:
-                self.apply_template(dlg.choice)
-            else:
-                # "Começar vazio" still writes the current simple setup into
-                # the document so we do not ask again on the next refresh.
-                self._initial_prompt_pending = False
-                self.save_data()
+        # A popup must be offered once, and only while the document is new.
+        if self._initial_prompt_offered_for_scene is self.scene:
             self._initial_prompt_pending = False
-        finally:
-            self._initial_prompt_running = False
+            return
+        from ..project_setup import should_offer_initial_setup
+        win = self.app.window
+        if getattr(win, '_current_path', None) is not None:
+            self._initial_prompt_pending = False
+            return
+        plugin = getattr(win, '_arquitetura_parametrica_controller', None)
+        if plugin is not None:
+            raw_bim = plugin.app.document_data(default=None)
+            groups = len(getattr(self.scene, 'groups', ()) or ())
+            clean = (getattr(self.scene, 'version', None) ==
+                     getattr(win, '_saved_version', object()) or
+                     bool(getattr(self.scene, '_opentrace_native_new_document', False)))
+            if not should_offer_initial_setup(raw_bim, groups,
+                                              has_saved_path=False,
+                                              clean_untitled=clean,
+                                              already_offered=(self._initial_prompt_offered_for_scene is self.scene)):
+                self._initial_prompt_pending = False
+                return
+        from ..project_setup_dialog import NewProjectSetupDialog
+        bim = getattr(self.app.window, '_arquitetura_parametrica_bim_controller', None)
+        plugin = getattr(self.app.window, '_arquitetura_parametrica_controller', None)
+        if bim is None or plugin is None:
+            # BIM panel may still be initializing; next viewport paint retries.
+            self._initial_prompt_event.arm()
+            return
+        self._initial_prompt_running = True
+        self._initial_prompt_offered_for_scene = self.scene
+        dlg = NewProjectSetupDialog(plugin.app, bim, self.app.window,
+                                    layer_controller=self, startup=True)
+        self._initial_template_dialog = dlg
+        dlg.finished.connect(self._initial_template_finished)
+        dlg.show()  # Nonmodal: do not hijack viewport key handling.
+        dlg.raise_()
+
+    def _initial_template_finished(self, result):
+        dlg = self._initial_template_dialog
+        if dlg is None:
+            return
+        self._initial_template_dialog = None
+        self._initial_prompt_running = False
+        # Even 'Agora não' is a deliberate choice. Never pop up during
+        # modelling in this document; manual configuration stays on Home.
+        if self.scene is self._initial_prompt_offered_for_scene:
+            self._initial_prompt_pending = False
+        elif self._initial_prompt_pending:
+            # A genuinely different document was opened while the nonmodal
+            # wizard was visible. Eligibility is checked on its next paint.
+            self._initial_prompt_event.arm()
+        dlg.deleteLater()
 
     # ------------------------------------------------------------- templates
     def personal_templates(self):

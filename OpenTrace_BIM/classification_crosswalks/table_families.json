@@ -1,0 +1,169 @@
+{
+  "format": "opentrace-table-families",
+  "version": 1,
+  "status": "conceptual-only",
+  "warning": "TABELAS SEMELHANTES NAO SIGNIFICAM CODIGOS EQUIVALENTES. NUNCA USAR PARA MIGRACAO AUTOMATICA.",
+  "systems": [
+    {
+      "id": "Uniclass 2015",
+      "publisher": "NBS",
+      "source": "https://uniclass.thenbs.com/download",
+      "edition": "Julho 2026"
+    },
+    {
+      "id": "OmniClass",
+      "publisher": "CSI / CSC",
+      "source": "https://www.csiresources.org/standards/omniclass/standards-omniclass-about",
+      "edition": "consultar tabela"
+    },
+    {
+      "id": "ABNT NBR 15965",
+      "publisher": "ABNT",
+      "reference": "https://siclic.fau.usp.br/busca",
+      "edition": "consultar parte/tabela"
+    }
+  ],
+  "families": [
+    {
+      "subject": "Produtos da construção",
+      "uniclass": {
+        "table": "Pr",
+        "label": "Products"
+      },
+      "omniclass": {
+        "table": "23",
+        "label": "Products"
+      },
+      "abnt": {
+        "table": "2C",
+        "label": "Produtos"
+      },
+      "automatic_code_mapping": false
+    },
+    {
+      "subject": "Elementos e funções construtivas",
+      "uniclass": {
+        "table": "EF",
+        "label": "Elements/functions"
+      },
+      "omniclass": {
+        "table": "21",
+        "label": "Elements"
+      },
+      "abnt": {
+        "table": "3E",
+        "label": "Elementos"
+      },
+      "automatic_code_mapping": false
+    },
+    {
+      "subject": "Espaços por uso/função",
+      "uniclass": {
+        "table": "SL",
+        "label": "Spaces/locations"
+      },
+      "omniclass": {
+        "table": "13",
+        "label": "Spaces by Function"
+      },
+      "abnt": {
+        "table": "4A",
+        "label": "Espaços"
+      },
+      "automatic_code_mapping": false
+    },
+    {
+      "subject": "Resultados dos trabalhos",
+      "uniclass": null,
+      "omniclass": {
+        "table": "22",
+        "label": "Work Results"
+      },
+      "abnt": {
+        "table": "3R",
+        "label": "Resultados dos trabalhos"
+      },
+      "automatic_code_mapping": false
+    },
+    {
+      "subject": "Materiais",
+      "uniclass": {
+        "table": "Ma",
+        "label": "Materials"
+      },
+      "omniclass": {
+        "table": "41",
+        "label": "Materials"
+      },
+      "abnt": {
+        "table": "0M",
+        "label": "Materiais"
+      },
+      "automatic_code_mapping": false
+    },
+    {
+      "subject": "Ferramentas e equipamentos de obra",
+      "uniclass": {
+        "table": "TE",
+        "label": "Tools and equipment"
+      },
+      "omniclass": {
+        "table": "35",
+        "label": "Tools"
+      },
+      "abnt": {
+        "table": "2Q",
+        "label": "Equipamentos"
+      },
+      "automatic_code_mapping": false
+    },
+    {
+      "subject": "Propriedades e características",
+      "uniclass": {
+        "table": "PC",
+        "label": "Properties and characteristics"
+      },
+      "omniclass": {
+        "table": "49",
+        "label": "Properties"
+      },
+      "abnt": {
+        "table": "0P",
+        "label": "Propriedades"
+      },
+      "automatic_code_mapping": false
+    },
+    {
+      "subject": "Informações de construção",
+      "uniclass": {
+        "table": "FI",
+        "label": "Form of information"
+      },
+      "omniclass": {
+        "table": "36",
+        "label": "Information"
+      },
+      "abnt": {
+        "table": "5I",
+        "label": "Informações"
+      },
+      "automatic_code_mapping": false
+    },
+    {
+      "subject": "Processos e serviços",
+      "uniclass": {
+        "table": "Ac",
+        "label": "Activities"
+      },
+      "omniclass": {
+        "table": "32",
+        "label": "Services"
+      },
+      "abnt": {
+        "table": "1S",
+        "label": "Serviços"
+      },
+      "automatic_code_mapping": false
+    }
+  ]
+}

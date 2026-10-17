@@ -1,0 +1,53 @@
+OpenTrace BIM — EXPERIMENTAL / ISOLADO — Correcoes da configuracao inicial
+============================================================================
+Esta versao nao deve ser publicada, copiada para a oficial ou mesclada com
+branchs, cadernos, documentacao externa ou outros pacotes sem autorizacao.
+Base: OpenTrace_BIM-EXPERIMENTAL-ISOLADO-CORRECAO-ABNT-SICLIC.zip
+
+1) ABNT / SICLIC
+  - Removido o atalho de instalacao que direcionava ao site SICLIC/busca.
+  - Acao direta e separada na etapa 3: "Instalar ABNT · SICLIC
+    (consulta direta ao bSDD)". O botao abre o gerenciador e solicita
+    confirmacao para consultar a API publica bSDD, no dicionario demonstrativo
+    DEMO/SICLIC/0.1.2 referido no proprio site do SICLIC.
+  - Exibe erro util e oferece importacao de planilhas CSV/XLSX/ZIP ABNT
+    como alternativa a uma indisponibilidade da API.
+  - Esta edicao e DEMO, nao a norma ABNT completa. Nao foram inventados
+    nem incorporados codigos de classificacao nao verificados.
+  - Acesso em producao ao endpoint NAO FOI TESTADO (rede indisponivel neste
+    ambiente). Se o bSDD estiver fora do ar, o botao nao instala a DEMO.
+
+2) INFORMACOES DO PROJETO
+  - Nova secao apos 1 (Template) e 2 (Conjunto de Combinacao de Layers).
+  - Identificacao: Projeto, Cliente, Localizacao, Descricao.
+  - Responsaveis: Autor, Escritorio / Organizacao.
+  - Estrutura: Terreno IFC, Edificio IFC, resumo dos Niveis cadastrados.
+  - Usa o mesmo registro BIM `project` ja empregado no exportador IFC;
+    nao duplica o armazenamento nem cria uma segunda copia no .igz.
+  - Salva as informacoes para reabertura; ao copiar um template .igz,
+    campos nao preenchidos preservam os valores desse arquivo.
+
+3) JANELA ABRINDO DURANTE MODELAGEM
+  - Desacoplada a deteccao de novo projeto das alteracoes nas camadas.
+  - Marcacao por cena para ofertar o assistente uma vez por documento.
+  - "Agora nao" nao reabre a janela em cada parede/porta/laje criada.
+  - Testa elegibilidade pelo projeto BIM e pelo estado limpo/nao salvo do host.
+  - Um novo projeto real continua elegivel para o assistente.
+  - O botao manual Home permanece disponivel quando o projeto estiver vazio.
+
+VALIDACAO
+  - 18 testes locais aprovados (10 de ABNT existentes + 8 de regressao).
+  - Compilacao sintatica Python e integridade do ZIP verificadas.
+  - Teste da interface grafica no IngeTrazo Windows: PENDENTE.
+  - Teste online da API SICLIC no Windows: PENDENTE.
+  - Nenhum GitHub, branch, documento ou caderno externo alterado.
+
+TESTE SUGERIDO NO WINDOWS
+  A) Abra um NOVO projeto: a janela unificada deve aparecer uma unica vez.
+  B) Preencha Projeto, Cliente, Autor, Terreno IFC; selecione layers/IFC.
+  C) Na etapa 3, clique "Instalar ABNT · SICLIC" e permita consultar.
+  D) Crie parede, laje e porta: a janela NAO deve voltar a aparecer.
+  E) Salve .igz, reabra, confira os dados BIM e a ausencia do assistente.
+
+Se houver erro online, copie a mensagem completa do bSDD. A ferramenta
+nunca deve informar que a instalacao da ABNT foi concluida sem receber dados.

@@ -1162,6 +1162,9 @@ def sync_wall_junctions(scene):
                             "edge_masks": mask_sig}
         group.children = children
         group.ext = ext
+        if values.get("edge_materials"):
+            from .wall_edge_finishes import stamp_wall_edge_finishes
+            stamp_wall_edge_finishes(group, scene, values)
         changed += 1
 
     # Legacy overlap masking assumes one horizontal base/top plane.  Keep it

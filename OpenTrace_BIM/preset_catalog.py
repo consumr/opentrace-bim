@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from .layers import normalize_layers, total_thickness
 from .i18n import t
+from .library_display import builtin_name, folder_label
 
 SETTINGS_KEY = "arquitetura_parametrica/element_presets_v2"
 FILE_FORMAT = "parametric-architecture-preset"
@@ -58,112 +59,161 @@ def builtins():
     if _BUILTIN_PRESETS is not None:
         return copy.deepcopy(_BUILTIN_PRESETS)
     wall=[]
-    wall.append(_p("wall:generic10","Genérica · 10 cm",
+    wall.append(_p("wall:generic10","Generic · 10 cm",
                    {"structure":"simple","thickness":0.10,"material_name":None},
-                   "Genéricas","Parede simples de partida."))
-    for tag,core,name in (("cer9",.09,"Bloco cerâmico 9 + reboco"),
-                          ("cer115",.115,"Bloco cerâmico 11,5 + reboco"),
-                          ("cer14",.14,"Bloco cerâmico 14 + reboco"),
-                          ("con9",.09,"Bloco de concreto 9 + reboco"),
-                          ("con14",.14,"Bloco de concreto 14 + reboco")):
+                   "Generic","Starter simple wall."))
+    for tag,core,name in (("cer9",.09,"Clay block 9 + render"),
+                          ("cer115",.115,"Clay block 11.5 + render"),
+                          ("cer14",.14,"Clay block 14 + render"),
+                          ("con9",.09,"Concrete block 9 + render"),
+                          ("con14",.14,"Concrete block 14 + render")):
         wall.append(_p(f"wall:{tag}",name,_composite([
-            ("Reboco externo",.015,"finish"),
-            (("Bloco de concreto" if tag.startswith("con") else "Bloco cerâmico"),core,"structure","core"),
-            ("Reboco interno",.015,"finish"),
-        ]),"Alvenaria"))
-    wall.append(_p("wall:cer9_tile1","Bloco cerâmico 9 + cerâmica em 1 face",_composite([
-        ("Reboco externo",.015,"finish"),("Bloco cerâmico",.09,"structure","core"),
-        ("Emboço interno",.015,"substrate"),("Argamassa colante",.005,"bonding"),
-        ("Revestimento cerâmico",.009,"finish"),
-    ]),"Alvenaria revestida"))
-    wall.append(_p("wall:cer14_tile2","Bloco cerâmico 14 + cerâmica nas 2 faces",_composite([
-        ("Revestimento cerâmico externo",.009,"finish"),("Argamassa colante externa",.005,"bonding"),
-        ("Emboço externo",.015,"substrate"),("Bloco cerâmico",.14,"structure","core"),
-        ("Emboço interno",.015,"substrate"),("Argamassa colante interna",.005,"bonding"),
-        ("Revestimento cerâmico interno",.009,"finish"),
-    ]),"Alvenaria revestida"))
+            ("Exterior render",.015,"finish"),
+            (("Concrete block" if tag.startswith("con") else "Clay block"),core,"structure","core"),
+            ("Interior render",.015,"finish"),
+        ]),"Masonry"))
+    wall.append(_p("wall:cer9_tile1","Clay block 9 + tile on one side",_composite([
+        ("Exterior render",.015,"finish"),("Clay block",.09,"structure","core"),
+        ("Interior base plaster",.015,"substrate"),("Tile adhesive",.005,"bonding"),
+        ("Ceramic tile",.009,"finish"),
+    ]),"Clad masonry"))
+    wall.append(_p("wall:cer14_tile2","Clay block 14 + tile on both sides",_composite([
+        ("Exterior ceramic tile",.009,"finish"),("Exterior tile adhesive",.005,"bonding"),
+        ("Exterior base plaster",.015,"substrate"),("Clay block",.14,"structure","core"),
+        ("Interior base plaster",.015,"substrate"),("Interior tile adhesive",.005,"bonding"),
+        ("Interior ceramic tile",.009,"finish"),
+    ]),"Clad masonry"))
+    # Expanded ready-to-use masonry; each physical band receives a visible
+    # default material below, without baking colors into user-created presets.
+    for tag, name, core_name, thickness in (
+        ('clay_brick_10','Exposed clay brick · 10 cm','Clay brick',.10),
+        ('clay_brick_15','Exposed clay brick · 15 cm','Clay brick',.15),
+        ('clay_block_14_bare','Exposed clay block · 14 cm','Clay block',.14),
+        ('clay_block_19_bare','Exposed clay block · 19 cm','Clay block',.19),
+        ('struct_con_14','Structural concrete block · 14 cm','Structural concrete block',.14),
+        ('struct_con_19','Structural concrete block · 19 cm','Structural concrete block',.19),
+        ('struct_con_20','Structural concrete block · 20 cm','Structural concrete block',.20),
+    ):
+        wall.append(_p('wall:'+tag,name,_composite([
+            (core_name,thickness,'structure','core'),
+        ]),'Exposed masonry' if 'Structural' not in name else 'Structural masonry'))
+    wall.append(_p('wall:brick_render','Clay brick + render on both sides',_composite([
+        ('Exterior render',.015,'finish'),('Clay brick',.10,'structure','core'),
+        ('Interior render',.015,'finish'),
+    ]),'Masonry'))
+    wall.append(_p('wall:struct_con19_render','Structural concrete block 19 + render',_composite([
+        ('Exterior render',.015,'finish'),('Structural concrete block',.19,'structure','core'),
+        ('Interior render',.015,'finish'),
+    ]),'Structural masonry'))
+    wall.append(_p('wall:clay19_render','Clay block 19 + render',_composite([
+        ('Exterior render',.015,'finish'),('Clay block',.19,'structure','core'),
+        ('Interior render',.015,'finish'),
+    ]),'Masonry'))
+    wall.append(_p('wall:wet_con14','Concrete block 14 + wet-area tile',_composite([
+        ('Exterior render',.015,'finish'),('Concrete block',.14,'structure','core'),
+        ('Interior base plaster',.015,'substrate'),('Interior tile adhesive',.005,'bonding'),
+        ('Interior ceramic tile',.009,'finish'),
+    ]),'Clad masonry'))
+    wall.append(_p('wall:dry95_insulated','Insulated drywall 95 mm',_composite([
+        ('Exterior gypsum board',.0125,'finish'),
+        ('70 mm stud + mineral insulation',.070,'insulation','core'),
+        ('Interior gypsum board',.0125,'finish'),
+    ]),'Drywall'))
+
     wall.append(_p("wall:dry95","Drywall 95 mm",_composite([
-        ("Chapa de gesso externa",.0125,"finish"),("Montante 70 mm",.070,"technical","core"),
-        ("Chapa de gesso interna",.0125,"finish"),
+        ("Exterior gypsum board",.0125,"finish"),("70 mm stud",.070,"technical","core"),
+        ("Interior gypsum board",.0125,"finish"),
     ]),"Drywall"))
-    wall.append(_p("wall:dry120","Drywall duplo 120 mm",_composite([
-        ("Chapa de gesso 1 externa",.0125,"finish"),("Chapa de gesso 2 externa",.0125,"finish"),
-        ("Montante 70 mm + lã",.070,"insulation","core"),
-        ("Chapa de gesso 1 interna",.0125,"finish"),("Chapa de gesso 2 interna",.0125,"finish"),
+    wall.append(_p("wall:dry120","Double drywall 120 mm",_composite([
+        ("Exterior gypsum board 1",.0125,"finish"),("Exterior gypsum board 2",.0125,"finish"),
+        ("70 mm stud + insulation",.070,"insulation","core"),
+        ("Interior gypsum board 1",.0125,"finish"),("Interior gypsum board 2",.0125,"finish"),
     ]),"Drywall"))
 
     slab=[]
-    slab.append(_p("slab:generic12","Genérica · 12 cm",
-                   {"structure":"simple","thickness":.12,"material_name":None},"Genéricas"))
-    slab.append(_p("slab:concrete12","Concreto armado aparente · 12 cm",
-                   _composite([("Concreto armado",.12,"structure","core")]),"Estruturais"))
-    slab.append(_p("slab:floor10","Concreto 10 + contrapiso + porcelanato",_composite([
-        ("Concreto armado",.10,"structure","core"),("Contrapiso",.04,"substrate"),
-        ("Argamassa colante",.005,"bonding"),("Porcelanato",.010,"finish"),
-    ]),"Pisos"))
-    slab.append(_p("slab:floor12","Concreto 12 + contrapiso + porcelanato",_composite([
-        ("Concreto armado",.12,"structure","core"),("Contrapiso",.04,"substrate"),
-        ("Argamassa colante",.005,"bonding"),("Porcelanato",.010,"finish"),
-    ]),"Pisos"))
-    slab.append(_p("slab:wood","Concreto 12 + acústica + madeira",_composite([
-        ("Concreto armado",.12,"structure","core"),("Manta acústica",.005,"insulation"),
-        ("Contrapiso",.04,"substrate"),("Piso de madeira",.015,"finish"),
-    ]),"Pisos"))
-    slab.append(_p("slab:wet","Área molhada impermeabilizada",_composite([
-        ("Concreto armado",.12,"structure","core"),("Regularização / caimento",.03,"substrate"),
-        ("Impermeabilização",.004,"waterproofing"),("Argamassa colante",.005,"bonding"),
-        ("Revestimento cerâmico",.010,"finish"),
-    ]),"Áreas molhadas"))
-    slab.append(_p("slab:roof","Cobertura impermeabilizada",_composite([
-        ("Concreto armado",.12,"structure","core"),("Regularização / caimento",.03,"substrate"),
-        ("Impermeabilização",.004,"waterproofing"),("Proteção mecânica",.04,"substrate"),
-    ]),"Coberturas"))
-    slab.append(_p("slab:inverted","Cobertura invertida com isolamento",_composite([
-        ("Concreto armado",.12,"structure","core"),("Regularização / caimento",.03,"substrate"),
-        ("Impermeabilização",.004,"waterproofing"),("Isolamento térmico XPS",.05,"insulation"),
-        ("Proteção mecânica",.04,"substrate"),
-    ]),"Coberturas"))
-    slab.append(_p("slab:green","Cobertura verde básica",_composite([
-        ("Concreto armado",.12,"structure","core"),("Regularização / caimento",.03,"substrate"),
-        ("Impermeabilização antirraiz",.005,"waterproofing"),("Camada drenante",.025,"technical"),
-        ("Substrato vegetal",.15,"other"),
-    ]),"Coberturas"))
+    slab.append(_p("slab:generic12","Generic · 12 cm",
+                   {"structure":"simple","thickness":.12,"material_name":None},"Generic"))
+    slab.append(_p("slab:concrete12","Exposed reinforced concrete · 12 cm",
+                   _composite([("Reinforced concrete",.12,"structure","core")]),"Structural"))
+    slab.append(_p("slab:floor10","Concrete 10 + screed + porcelain tile",_composite([
+        ("Reinforced concrete",.10,"structure","core"),("Screed",.04,"substrate"),
+        ("Tile adhesive",.005,"bonding"),("Porcelain tile",.010,"finish"),
+    ]),"Floors"))
+    slab.append(_p("slab:floor12","Concrete 12 + screed + porcelain tile",_composite([
+        ("Reinforced concrete",.12,"structure","core"),("Screed",.04,"substrate"),
+        ("Tile adhesive",.005,"bonding"),("Porcelain tile",.010,"finish"),
+    ]),"Floors"))
+    slab.append(_p("slab:wood","Concrete 12 + acoustic layer + timber floor",_composite([
+        ("Reinforced concrete",.12,"structure","core"),("Acoustic underlay",.005,"insulation"),
+        ("Screed",.04,"substrate"),("Timber flooring",.015,"finish"),
+    ]),"Floors"))
+    slab.append(_p("slab:wet","Waterproofed wet area",_composite([
+        ("Reinforced concrete",.12,"structure","core"),("Leveling / falls",.03,"substrate"),
+        ("Waterproofing",.004,"waterproofing"),("Tile adhesive",.005,"bonding"),
+        ("Ceramic tile",.010,"finish"),
+    ]),"Wet areas"))
+    slab.append(_p("slab:roof","Waterproofed roof",_composite([
+        ("Reinforced concrete",.12,"structure","core"),("Leveling / falls",.03,"substrate"),
+        ("Waterproofing",.004,"waterproofing"),("Protection screed",.04,"substrate"),
+    ]),"Roofs"))
+    slab.append(_p("slab:inverted","Insulated inverted roof",_composite([
+        ("Reinforced concrete",.12,"structure","core"),("Leveling / falls",.03,"substrate"),
+        ("Waterproofing",.004,"waterproofing"),("XPS thermal insulation",.05,"insulation"),
+        ("Protection screed",.04,"substrate"),
+    ]),"Roofs"))
+    slab.append(_p("slab:green","Basic green roof",_composite([
+        ("Reinforced concrete",.12,"structure","core"),("Leveling / falls",.03,"substrate"),
+        ("Root-resistant waterproofing",.005,"waterproofing"),("Drainage layer",.025,"technical"),
+        ("Planting substrate",.15,"other"),
+    ]),"Roofs"))
 
     beam=[]
     for w,h in ((.15,.30),(.20,.40),(.20,.50),(.20,.60),(.25,.60),(.30,.60)):
         beam.append(_p(f"beam:concrete:{int(w*100)}x{int(h*100)}",
-            f"Concreto armado · {int(w*100)} × {int(h*100)} cm",
+            f"Reinforced concrete · {int(w*100)} × {int(h*100)} cm",
             {"section_type":"simple","profile":"rect","width":w,"height":h,
-             "diameter":min(w,h),"material_name":None},"Concreto armado"))
+             "diameter":min(w,h),"material_name":None},"Reinforced concrete"))
     for w,h in ((.05,.15),(.06,.20),(.08,.20),(.10,.30)):
         beam.append(_p(f"beam:wood:{int(w*100)}x{int(h*100)}",
-            f"Madeira · {int(w*100)} × {int(h*100)} cm",
+            f"Timber · {int(w*100)} × {int(h*100)} cm",
             {"section_type":"simple","profile":"rect","width":w,"height":h,
-             "diameter":min(w,h),"material_name":None},"Madeira"))
+             "diameter":min(w,h),"material_name":None},"Timber"))
     for code in ("W 150 x 13,0","W 200 x 19,3","W 250 x 22,3","W 310 x 28,3","W 360 x 32,9",
                  "IPE 160","IPE 200","IPE 240","HEA 200","HEB 200"):
         family="gerdau_w" if code.startswith("W ") else code.split()[0].lower()
         slug=code.lower().replace(" ","").replace(",",".").replace("/","-")
-        beam.append(_p(f"beam:steel:{slug}",f"Aço · {code}",
+        beam.append(_p(f"beam:steel:{slug}",f"Steel · {code}",
             {"section_type":"complex","profile_ref":f"builtin:steel:{family}:{slug}","material_name":None},
-            "Aço"))
+            "Steel"))
 
     column=[]
     for w,d in ((.20,.20),(.20,.30),(.25,.25),(.30,.30),(.30,.40)):
         column.append(_p(f"column:concrete:{int(w*100)}x{int(d*100)}",
-            f"Concreto · {int(w*100)} × {int(d*100)} cm",
+            f"Concrete · {int(w*100)} × {int(d*100)} cm",
             {"section_type":"simple","profile":"rect","width":w,"depth":d,
-             "diameter":min(w,d),"material_name":None,"stations":None},"Concreto armado"))
+             "diameter":min(w,d),"material_name":None,"stations":None},"Reinforced concrete"))
     for side in (.15,.20):
         column.append(_p(f"column:wood:{int(side*100)}",
-            f"Madeira · {int(side*100)} × {int(side*100)} cm",
+            f"Timber · {int(side*100)} × {int(side*100)} cm",
             {"section_type":"simple","profile":"rect","width":side,"depth":side,
-             "diameter":side,"material_name":None,"stations":None},"Madeira"))
+             "diameter":side,"material_name":None,"stations":None},"Timber"))
     for code in ("HEA 160","HEA 200","HEB 200"):
         family=code.split()[0].lower(); slug=code.lower().replace(" ","")
-        column.append(_p(f"column:steel:{slug}",f"Aço · {code}",
+        column.append(_p(f"column:steel:{slug}",f"Steel · {code}",
             {"section_type":"complex","profile_ref":f"builtin:steel:{family}:{slug}",
-             "material_name":None,"stations":None},"Aço"))
+             "material_name":None,"stations":None},"Steel"))
+
+    # Give BUILT-IN wall composites ready-to-render starter appearances for
+    # each physical layer. This is opt-in by choosing the preset; never alter
+    # old projects or personalized material choices on re-open.
+    from .materials import default_wall_layer_material
+    for preset in wall:
+        cfg = preset.get("config", {})
+        if cfg.get("structure") != "composite":
+            continue
+        for layer in cfg.get("layers", ()):
+            if not layer.get("material_name"):
+                layer["material_name"] = default_wall_layer_material(layer)
 
     _BUILTIN_PRESETS={"wall":wall,"slab":slab,"beam":beam,"column":column}
     return copy.deepcopy(_BUILTIN_PRESETS)
@@ -184,7 +234,51 @@ def save_personal(data):
 def personal_for(kind): return copy.deepcopy(load_personal().get(kind,[]))
 
 
-def all_for(kind): return copy.deepcopy(builtins().get(kind,[]))+personal_for(kind)
+# A None selection means a legacy project: preserve its preexisting behavior.
+# Only new opt-in resource collections restrict the quick-tool preset lists.
+_ACTIVE_COLLECTIONS = None
+
+
+def set_active_collections(project):
+    global _ACTIVE_COLLECTIONS
+    setup = project.get('project_setup', {}) if isinstance(project, dict) else {}
+    records = setup.get('resource_libraries', ()) if isinstance(setup, dict) else ()
+    if not isinstance(records, list) or (
+            setup.get('library_selection_mode') != 'curated' and
+            not any(isinstance(p, dict) and
+                    p.get('format') == 'opentrace-resource-collection' for p in records)):
+        _ACTIVE_COLLECTIONS = None
+        return
+    from .resource_collections import validate_collection
+    selections=[]
+    for pack in records:
+        try:
+            selections.append(validate_collection(pack))
+        except (TypeError, ValueError):
+            continue
+    _ACTIVE_COLLECTIONS=selections
+
+
+def all_for(kind):
+    # The master catalog stays intact and browseable in LibraryManagerDialog.
+    # The quick list only contains recipes explicitly loaded for this project.
+    personal = personal_for(kind)
+    if _ACTIVE_COLLECTIONS is None:
+        return copy.deepcopy(builtins().get(kind, [])) + personal
+    keys = {}
+    for collection in _ACTIVE_COLLECTIONS:
+        for rec in collection['resources']:
+            if rec['kind'] != kind:
+                continue
+            data = rec.get('data', {})
+            if not isinstance(data, dict) or not data.get('config'):
+                continue
+            # Preserve original preset ID: a re-opened project sees the same
+            # resource identity and existing modeled elements are untouched.
+            keys[str(data.get('id') or rec['id'])] = copy.deepcopy(data)
+    for rec in personal:
+        keys[str(rec.get('id'))] = rec
+    return list(keys.values())
 
 
 def _clean_name(value): return " ".join(str(value or "").split())
@@ -253,26 +347,33 @@ def apply_preset(kind,controller,preset):
 
 
 class ElementPresetPanel(QWidget):
-    LABELS={"wall":"Parede","slab":"Laje","beam":"Viga","column":"Pilar"}
+    LABELS={"wall":"Wall","slab":"Slab","beam":"Beam","column":"Column"}
     def __init__(self,kind,controller,parent=None):
         super().__init__(parent or controller.panel);self.kind=kind;self.controller=controller;self._rows=[]
         lay=QVBoxLayout(self);lay.setContentsMargins(0,4,0,5);lay.setSpacing(4)
-        title=QLabel(f"<b>Biblioteca · {self.LABELS.get(kind,kind)}</b>");lay.addWidget(title)
+        title=QLabel(f"<b>Library · {self.LABELS.get(kind,kind)}</b>");lay.addWidget(title)
         self.combo=QComboBox();self.combo.currentIndexChanged.connect(self._sync);lay.addWidget(self.combo)
-        row=QHBoxLayout();self.apply_btn=QPushButton("Aplicar");self.save_btn=QPushButton("Salvar como…");self.rename_btn=QPushButton("Renomear");row.addWidget(self.apply_btn);row.addWidget(self.save_btn);row.addWidget(self.rename_btn);lay.addLayout(row)
-        row2=QHBoxLayout();self.delete_btn=QPushButton("Excluir");self.export_btn=QPushButton("Exportar…");self.import_btn=QPushButton("Importar…");row2.addWidget(self.delete_btn);row2.addWidget(self.export_btn);row2.addWidget(self.import_btn);lay.addLayout(row2)
+        row=QHBoxLayout();self.apply_btn=QPushButton("Apply preset");self.save_btn=QPushButton("Save as…");self.rename_btn=QPushButton("Rename");row.addWidget(self.apply_btn);row.addWidget(self.save_btn);row.addWidget(self.rename_btn);lay.addLayout(row)
+        row2=QHBoxLayout();self.delete_btn=QPushButton("Delete");self.export_btn=QPushButton("Export "+self.LABELS.get(kind,kind).lower()+"…");self.import_btn=QPushButton("Import "+self.LABELS.get(kind,kind).lower()+"…");row2.addWidget(self.delete_btn);row2.addWidget(self.export_btn);row2.addWidget(self.import_btn);lay.addLayout(row2)
+        if kind == "wall":
+            note = QLabel("Saved wall styles: choose a preset and use Apply preset only to replace the wall type. Material, dimensions and layer edits below update immediately.")
+            note.setWordWrap(True)
+            note.setStyleSheet("color:#8e98a2;font-size:9pt;")
+            lay.addWidget(note)
         self.info=QLabel();self.info.setWordWrap(True);self.info.setStyleSheet("color:#777;font-size:9pt;");lay.addWidget(self.info)
+        self.apply_btn.setToolTip("Replace the current object's configuration with this saved preset. Other property edits are automatic.")
         self.apply_btn.clicked.connect(self.apply);self.save_btn.clicked.connect(self.save_current);self.rename_btn.clicked.connect(self.rename);self.delete_btn.clicked.connect(self.delete);self.export_btn.clicked.connect(self.export);self.import_btn.clicked.connect(self.import_file)
         self.refresh()
     def refresh(self,select_id=None):
         old=select_id if select_id is not None else self.combo.currentData();self.combo.blockSignals(True);self.combo.clear();self._rows=[]
         current_group=None;idx=-1;first_real=-1
         for item in all_for(self.kind):
-            group=item.get("group") or "Outros"
+            group=item.get("group") or "Other"
+            if item.get("builtin"):group=folder_label(group)
             if group!=current_group:
                 if self.combo.count():self.combo.insertSeparator(self.combo.count())
                 self.combo.addItem(f"— {group} —",None);self.combo.model().item(self.combo.count()-1).setEnabled(False);current_group=group
-            self.combo.addItem(item["name"],item["id"]);self._rows.append(item)
+            self.combo.addItem(builtin_name(item["name"]) if item.get("builtin") else item["name"],item["id"]);self._rows.append(item)
             if first_real<0:first_real=self.combo.count()-1
             if item["id"]==old:idx=self.combo.count()-1
         self.combo.setCurrentIndex(idx if idx>=0 else first_real);self.combo.blockSignals(False);self._sync()
@@ -283,46 +384,50 @@ class ElementPresetPanel(QWidget):
     def _sync(self,*_):
         p=self.selected();enabled=p is not None;personal=enabled and not p.get("builtin",False)
         self.apply_btn.setEnabled(enabled);self.rename_btn.setEnabled(personal);self.delete_btn.setEnabled(personal);self.export_btn.setEnabled(enabled)
-        self.info.setText((p.get("description") or ("Preset incluído no plugin." if p and p.get("builtin") else "Preset pessoal.")) if p else "")
+        self.info.setText((p.get("description") or ("Preset bundled with the plugin." if p and p.get("builtin") else "Personal preset.")) if p else "")
     def apply(self):
         p=self.selected()
         if not p:return
-        try:apply_preset(self.kind,self.controller,p);self.controller.message(f"Preset '{p['name']}' aplicado.")
+        try:apply_preset(self.kind,self.controller,p);self.controller.message(f"Preset '{p['name']}' applied.")
         except Exception as exc:self.controller.message(str(exc),error=True)
     def save_current(self):
-        name,ok=QInputDialog.getText(self,t("Salvar preset"), t("Nome do preset:"))
+        name,ok=QInputDialog.getText(self,"Save preset", "Preset name:")
         if not ok or not _clean_name(name):return
-        item=upsert_personal(self.kind,{"name":_clean_name(name),"group":"Meus Presets","revision":1,"config":_source_values(self.kind,self.controller)})
+        item=upsert_personal(self.kind,{"name":_clean_name(name),"group":"My presets","revision":1,"config":_source_values(self.kind,self.controller)})
         self.refresh(item["id"])
     def rename(self):
         p=self.selected()
         if not p or p.get("builtin"):return
-        name,ok=QInputDialog.getText(self,t("Renomear preset"),t("Novo nome:"),text=p["name"])
+        name,ok=QInputDialog.getText(self,"Rename preset","New name:",text=p["name"])
         if not ok or not _clean_name(name):return
         p["name"]=_clean_name(name);p["revision"]=int(p.get("revision",1))+1;item=upsert_personal(self.kind,p);self.refresh(item["id"])
     def delete(self):
         p=self.selected()
         if not p or p.get("builtin"):return
-        if QMessageBox.question(self,t("Excluir preset"),t(f"Excluir '{p['name']}'?"),QMessageBox.Yes|QMessageBox.No,QMessageBox.No)!=QMessageBox.Yes:return
+        if QMessageBox.question(self,"Delete preset",f"Delete '{p['name']}'?",QMessageBox.Yes|QMessageBox.No,QMessageBox.No)!=QMessageBox.Yes:return
         delete_personal(self.kind,p["id"]);self.refresh()
     def export(self):
         p=self.selected()
         if not p:return
-        path,_=QFileDialog.getSaveFileName(self,t("Exportar preset"),f"{p['name'].replace('/','-')}.apreset","Preset Parametric Architecture (*.apreset);;JSON (*.json)")
+        path,_=QFileDialog.getSaveFileName(self,"Export preset",f"{p['name'].replace('/','-')}.apreset","Preset Parametric Architecture (*.apreset);;JSON (*.json)")
         if not path:return
         if not Path(path).suffix:path += ".apreset"
         payload={"format":FILE_FORMAT,"version":FILE_VERSION,"preset":p}
         Path(path).write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding="utf-8")
     def import_file(self):
-        path,_=QFileDialog.getOpenFileName(self,t("Importar preset"),"","Preset Parametric Architecture (*.apreset *.json)")
-        if not path:return
-        try:
-            payload=json.loads(Path(path).read_text(encoding="utf-8"));p=payload.get("preset") if isinstance(payload,dict) else None
-            if not isinstance(p,dict) or payload.get("format")!=FILE_FORMAT:raise ValueError("Unrecognized preset format.")
-            kind=str(p.get("kind") or self.kind)
-            if kind!=self.kind:raise ValueError(f"This file is a {kind} preset, not a {self.kind} preset.")
-            p=copy.deepcopy(p);p["id"]=uuid.uuid4().hex;p["builtin"]=False;p["group"]="Importados";item=upsert_personal(self.kind,p);self.refresh(item["id"])
-        except Exception as exc:QMessageBox.critical(self,t("Importar preset"),str(exc))
+        # OpenTrace's own hierarchical browser, filtered to this tool.
+        # No IngeTrazo AI assistant, no external workspace or library installer.
+        from .resource_collections_ui import LibraryManagerDialog
+        dialog=LibraryManagerDialog(None,self,current_kind=self.kind)
+        dialog._browse_complete()
+        if dialog.exec():
+            # No project handle in this legacy tool-side entry point: keep
+            # the checked recipes active for the current session. The project
+            # library manager is responsible for persisting the selections.
+            from .resource_collections import validate_collection
+            global _ACTIVE_COLLECTIONS
+            _ACTIVE_COLLECTIONS=[validate_collection(p) for p in dialog.selected_collections()]
+        self.refresh()
 
 
 class PresetCatalogController:

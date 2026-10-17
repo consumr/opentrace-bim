@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""IFC4 exporter for OpenTrace BIM.
+"""IFC4 / experimental IFC4.3 STEP exporter for OpenTrace BIM.
 
 The exporter is intentionally independent from Bonsai internals.  It mirrors
 openBIM patterns used there (types, layer sets, spatial containment, property
@@ -20,10 +20,24 @@ from . import __version__
 from .bim import (deterministic_ifc_guid, ensure_spatial_ids, ifc_identity_data,
                   element_kind, is_bim_group, load_document_data, new_ifc_guid, record_for)
 from .layers import function_category, wall_overall_offsets
+from .door_window_core import normalize_fill, wallhole_size
 
 
 class IfcExportError(RuntimeError):
     pass
+
+# Official IFC4.3 ADD2 schema token.  The existing writer uses the common
+# architectural entity subset (IfcWall/Slab/Beam/Column/Door/Window, etc.).
+# Full schema/consumer interoperability must still be validated in Windows.
+SCHEMA_IDS = {'IFC4': 'IFC4', 'IFC4.3': 'IFC4X3_ADD2',
+              'IFC4X3_ADD2': 'IFC4X3_ADD2'}
+
+
+def normalize_export_schema(name):
+    key = str(name or 'IFC4').strip().upper()
+    if key not in ('IFC4', 'IFC4.3', 'IFC4X3_ADD2'):
+        raise IfcExportError('Versão IFC não suportada pelo exportador experimental: ' + str(name))
+    return SCHEMA_IDS[key]
 
 
 EXPORT_PROFILES = {
@@ -87,7 +101,8 @@ def _list(values):
 
 
 class _Step:
-    def __init__(self, view_definition="ReferenceView_V1.2"):
+    def __init__(self, view_definition="ReferenceView_V1.2", schema="IFC4"):
+        self.schema = normalize_export_schema(schema)
         self.rows = []
         self.view_definition = str(view_definition or "ReferenceView_V1.2")
 
@@ -105,7 +120,7 @@ class _Step:
             f"FILE_DESCRIPTION(('ViewDefinition [{self.view_definition}]'),'2;1');",
             f"FILE_NAME({_s(name)},{_s(stamp)},({_s(author)}),({_s(organization)}),"
             f"{_s('OpenTrace BIM ' + __version__)},{_s('OpenTrace BIM')},'');",
-            "FILE_SCHEMA(('IFC4'));",
+            f"FILE_SCHEMA(({_s(self.schema)}));",
             "ENDSEC;",
             "DATA;",
         ]
@@ -1103,8 +1118,24 @@ def _opening_properties(rec, item, index):
     return out
 
 
+def _hosted_fill_key(group):
+    """Live door/window identity used to link its body to the wall void."""
+    rec = record_for(group)
+    if not isinstance(rec, dict) or rec.get("kind") not in ("door", "window"):
+        return None
+    params = rec.get("params")
+    params = params if isinstance(params, dict) else {}
+    host = rec.get("host_id") or params.get("host_id")
+    opening = rec.get("opening_id") or params.get("opening_id")
+    source = rec.get("source_id") or params.get("id")
+    if not all((host, opening, source)):
+        return None
+    return (str(host), str(opening), str(source))
+
+
 def _add_opening_relations(step, host_ref, rec, storey_ref, placement_ref, context,
-                           include_psets=True, *, type_cache=None, project_gid=""):
+                           include_psets=True, *, type_cache=None, project_gid="",
+                           host_uid=None, linked_products=None):
     raw = rec.get("openings") if isinstance(rec, dict) else None
     if not isinstance(raw, list): return {"openings": [], "fills": []}
     out, fills = [], []
@@ -1120,6 +1151,20 @@ def _add_opening_relations(step, host_ref, rec, storey_ref, placement_ref, conte
         out.append(opening)
 
         fill = item.get("fill")
+        # A live parametric fill has already been exported with its REAL body
+        # representation. Relate that exact product instead of manufacturing a
+        # second, geometry-less IfcDoor/IfcWindow from the opening metadata.
+        link_key = (str(host_uid), str(item.get("id")), str(item.get("source_id")))
+        actual = (linked_products or {}).get(link_key)
+        if actual is not None:
+            fgid, product, cls = actual
+            declared = fill.get("class") if isinstance(fill, dict) else None
+            if cls not in ("IfcDoor", "IfcWindow") or (declared and declared != cls):
+                raise IfcExportError("Tipo IFC do objeto não corresponde à abertura hospedada.")
+            step.add("IfcRelFillsElement",
+                     f"{_s(new_ifc_guid())},$,$,$,{opening},{product}")
+            fills.append((fgid, product, cls))
+            continue
         if not isinstance(fill, dict):
             # Backwards-compatible shorthand accepted by future door/window tools.
             cls = item.get("fill_class") or item.get("ifc_fill_class")
@@ -1199,6 +1244,10 @@ def export_ifc(app, path, *, data=None):
     groups = [g for g in list(getattr(scene, "groups", ()) or ()) if is_bim_group(g)]
     if not groups:
         raise IfcExportError("O documento não contém elementos OpenTrace BIM para exportar.")
+    # Export physical fills before their walls, allowing a single IFC product
+    # to be reused by IfcRelFillsElement regardless of scene creation order.
+    # Preserve relative ordering for all other objects.
+    groups.sort(key=lambda group: 0 if _hosted_fill_key(group) else 1)
 
     config = copy.deepcopy(data or load_document_data(app))
     project = config.get("project", {})
@@ -1209,6 +1258,7 @@ def export_ifc(app, path, *, data=None):
     include_quantities = bool(options.get("include_quantities", True))
     include_styles = bool(options.get("include_styles", True))
     include_roundtrip = bool(options.get("include_parametric_roundtrip", True))
+    schema = normalize_export_schema(options.get("schema", "IFC4"))
     profile_key, profile_cfg = export_profile(options.get("profile", "bonsai"))
     if profile_key != "opentrace":
         include_openings = False
@@ -1218,7 +1268,7 @@ def export_ifc(app, path, *, data=None):
     if "include_opening_relations" not in options:
         include_openings = bool(profile_cfg.get("opening_relations", False))
 
-    step = _Step("ReferenceView_V1.2" if profile_key == "opentrace" else "DesignTransferView_V1.0")
+    step = _Step("ReferenceView_V1.2" if profile_key == "opentrace" else "DesignTransferView_V1.0", schema=schema)
     # Shared geometry / units.  Author both the 3D Model and 2D Plan context
     # tree used by standard IFC authoring tools.  Bonsai's native wall editor,
     # for example, asks explicitly for Plan/Axis/GRAPH_VIEW; omitting that
@@ -1272,6 +1322,7 @@ def export_ifc(app, path, *, data=None):
     by_storey = {name: [] for name in storey_refs}
     exported = []
     product_by_gid = {}
+    linked_products = {}
     opening_count = 0
     representation_counts = {"SweptSolid": 0, "Brep": 0, "Tessellation": 0, "MappedRepresentation": 0}
 
@@ -1279,6 +1330,23 @@ def export_ifc(app, path, *, data=None):
         meta = ifc_identity_data(group)
         rec = record_for(group)
         ifc_class = str(meta.get("class") or "IfcBuildingElementProxy")
+        door = None
+        if ifc_class == "IfcDoor" and rec.get("kind") == "door":
+            door = normalize_fill(rec["params"])
+            rough_width, rough_height = wallhole_size(door)
+            meta["overall_width"] = rough_width
+            meta["overall_height"] = rough_height
+            meta["predefined_type"] = "DOOR"
+            # IFC handing is observed from the side into which the leaf opens.
+            # Reversing the swing reverses the observed hinge side.
+            if door["family_key"] in ("sliding_surface", "sliding_pocket"):
+                meta["operation_type"] = (
+                    "SLIDING_TO_LEFT" if door["slide_side"] == "left" else "SLIDING_TO_RIGHT")
+                # Pocket/surface distinction remains in parametric payload.
+            else:
+                left_handed = (door["hinge"] == "left") == (door["swing"] == 1)
+                meta["operation_type"] = (
+                    "SINGLE_SWING_LEFT" if left_handed else "SINGLE_SWING_RIGHT")
         repmap_ref=None; prototype_key=None; source_rep_kind=None
         if bool(options.get("use_representation_maps",True)):
             prototype_key=_component_prototype_key(group)
@@ -1304,6 +1372,11 @@ def export_ifc(app, path, *, data=None):
         product = _make_product(step, ifc_class, gid, name, object_type, global_place, shape, predefined, meta)
         exported.append(product)
         product_by_gid[gid] = product
+        fill_key = _hosted_fill_key(group)
+        if fill_key is not None:
+            if fill_key in linked_products:
+                raise IfcExportError("Duas esquadrias estão associadas ao mesmo vão.")
+            linked_products[fill_key] = (gid, product, ifc_class)
         representation_counts[representation_kind] = representation_counts.get(representation_kind, 0) + 1
 
         rec["type_name"] = type_name
@@ -1365,7 +1438,24 @@ def export_ifc(app, path, *, data=None):
             for pset_name, values in authored_psets.items():
                 if pset_name in ("Pset_OpenTraceParametric", "EPset_Parametric") or not isinstance(values, dict):
                     continue
+                if door is not None and pset_name == "OpenTrace_Door":
+                    continue
                 _add_named_property_set(step, product, pset_name, values)
+            if door is not None:
+                # Instance data, not family/type metadata. Lengths are metres;
+                # both angles are degrees, as specified in docs/PORTAS.md.
+                _add_named_property_set(step, product, "OpenTrace_Door", {
+                    "LeafWidth": door["width"],
+                    "LeafHeight": door["height"],
+                    "ClearanceLeft": door["clearance_left"],
+                    "ClearanceRight": door["clearance_right"],
+                    "ClearanceTop": door["clearance_top"],
+                    "ClearanceBottom": door["clearance_bottom"],
+                    "PlanAngle": door["plan_angle"],
+                    "ModelAngle": door["model_angle"],
+                    "Family": "F01 swing_single",
+                    "Schema": door["schema"],
+                })
             if include_roundtrip and rec.get("schema"):
                 payload = json.dumps(_parametric_payload(group, rec), ensure_ascii=False, separators=(",", ":"))
                 _add_named_property_set(step, product, "EPset_OpenTraceRoundTrip", {
@@ -1384,7 +1474,8 @@ def export_ifc(app, path, *, data=None):
         if include_openings:
             ops = _add_opening_relations(step, product, rec, storey_refs.get(storey_name), global_place,
                                          body_context, include_psets, type_cache=type_cache,
-                                         project_gid=project_gid)
+                                         project_gid=project_gid, host_uid=getattr(group, "uid", None),
+                                         linked_products=linked_products)
             opening_count += len(ops.get("openings", ()))
             for fgid, fref, _fcls in ops.get("fills", ()):
                 product_by_gid[fgid] = fref
@@ -1407,11 +1498,11 @@ def export_ifc(app, path, *, data=None):
         "openings": opening_count,
         "storeys": len(storey_refs),
         "types": sum(1 for x in type_cache.values() if x),
-        "schema": "IFC4",
+        "schema": schema,
         "profile": profile_key,
         "representations": representation_counts,
         "georeferenced": bool(georef),
         "relations": relations,
         "representation_maps": len(representation_map_cache),
-        "catalogue": "IFC4 Add2 TC1 / IfcOpenShell 0.9.0 data",
+        "catalogue": "IFC4 Add2 TC1 metadata; IFC4.3 ADD2 geometric subset experimental" if schema != "IFC4" else "IFC4 Add2 TC1 / IfcOpenShell 0.9.0 data",
     }

@@ -66,6 +66,7 @@ def default_document_data():
         "project": {
             "name": "Projeto OpenTrace", "site": "Terreno", "building": "Edifício",
             "author": "", "organization": "", "description": "",
+            "client": "", "location": "",
         },
         "spatial_ids": {
             "project": new_ifc_guid(), "site": new_ifc_guid(), "building": new_ifc_guid(),
@@ -113,6 +114,11 @@ def normalize_document_data(raw):
     if profile not in ("opentrace", "bonsai", "archicad", "revit"):
         profile = "bonsai"
     out["export"]["profile"] = profile
+    # Do not silently re-label a project as IFC4.3; old projects stay IFC4.
+    schema = str(out.get('export', {}).get('schema') or 'IFC4').upper()
+    if schema not in ('IFC4', 'IFC4.3', 'IFC4X3_ADD2'):
+        schema = 'IFC4'
+    out['export']['schema'] = 'IFC4X3_ADD2' if schema != 'IFC4' else 'IFC4'
     for key in ("include_property_sets", "include_material_layers", "include_opening_relations",
                 "include_quantities", "include_styles", "include_parametric_roundtrip",
                 "use_representation_maps"):
@@ -201,6 +207,16 @@ def ifc_identity_data(group, ifc_class=None, *, name=None):
     if not current.get("type_name"): current["type_name"] = suggested_type_name(group, cls)
     current.setdefault("property_sets", {})
     current.setdefault("classifications", [])
+    # Every new parametric element has an IFC4 entity identifier by default.
+    # This is an internal cross-platform taxonomy, not an ABNT code. Users can
+    # opt out per object or select a real external classification explicitly.
+    if not current.get("classification_opt_out") and not (
+            current.get("classification_system") or current.get("classification_code")
+            or current.get("classifications")):
+        from .ifc_catalog import default_internal_classification
+        native = default_internal_classification(cls)
+        current["classification_system"] = native["system"]
+        current["classification_code"] = native["code"]
     current.setdefault("systems", [])
     current.setdefault("groups", [])
     return current

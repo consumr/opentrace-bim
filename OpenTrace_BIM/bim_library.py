@@ -6,6 +6,20 @@ import copy, json
 SETTINGS_KEY = "opentrace/bim_library_v1"
 
 
+def builtin_classifications():
+    """Offline, full IFC4 class identifiers from bundled buildingSMART schema.
+
+    These are a useful built-in internal classification and do NOT masquerade
+    as NBR 15965, Uniclass, OmniClass or another separately licensed taxonomy.
+    """
+    from .ifc_catalog import ENTITY_LABELS, default_internal_classification, entity_catalog
+    return {
+        "IFC4 · " + (ENTITY_LABELS.get(cls, cls) + " — " + cls
+                     if cls in ENTITY_LABELS else cls): default_internal_classification(cls)
+        for cls in entity_catalog()
+    }
+
+
 def _defaults():
     return {"types": {}, "classifications": {}, "material_styles": {}}
 
@@ -41,6 +55,7 @@ def merged_library(document_data):
     personal = load_personal_library()
     local = document_data.get("libraries", {}) if isinstance(document_data, dict) else {}
     out = _defaults()
+    out["classifications"].update(builtin_classifications())
     for k in out:
         out[k].update(personal.get(k, {}))
         if isinstance(local, dict) and isinstance(local.get(k), dict): out[k].update(copy.deepcopy(local[k]))

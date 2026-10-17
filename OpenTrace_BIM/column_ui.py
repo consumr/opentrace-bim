@@ -2,6 +2,7 @@
 """Column palette, toolbar action and graphical top handle."""
 from __future__ import annotations
 import logging, math
+from .materials_ui import MaterialPickerCombo
 from PySide6.QtCore import QEvent,QPoint,QPointF,QRectF,QSize,Qt,QTimer
 from PySide6.QtGui import QAction,QColor,QIcon,QPainter,QPen,QPixmap,QVector3D
 from PySide6.QtWidgets import (QComboBox,QFormLayout,QGridLayout,QHBoxLayout,
@@ -55,9 +56,9 @@ class ColumnController(QWidget):
     def _make_panel(self):
         self.panel=QWidget();lay=QVBoxLayout(self.panel);lay.addWidget(QLabel(t("Pilar")));form=QFormLayout();self.form=form;lay.addLayout(form)
         self.base_level=QComboBox();self.base_level.currentIndexChanged.connect(self.base_level_changed);form.addRow(t("Nível base"),self.base_level)
-        self.base_offset=self._spin(0.05,-MAX_DIM,MAX_DIM);self.base_offset.setToolTip("Cota absoluta quando livre; offset quando vinculado a um nível.");form.addRow(t("Cota / offset base"),self.base_offset)
+        self.base_offset=self._spin(0.05,-MAX_DIM,MAX_DIM);self.base_offset.setToolTip("Absolute elevation in free mode; offset when linked to a level.");form.addRow(t("Cota / offset base"),self.base_offset)
         self.top_level=QComboBox();self.top_level.currentIndexChanged.connect(self.top_level_changed);form.addRow(t("Nível topo"),self.top_level)
-        self.top_offset=self._spin(0.05,-MAX_DIM,MAX_DIM);self.top_offset.setToolTip("Offset do topo em relação ao nível superior vinculado.");form.addRow(t("Offset topo"),self.top_offset)
+        self.top_offset=self._spin(0.05,-MAX_DIM,MAX_DIM);self.top_offset.setToolTip('Top offset relative to the linked upper level.');form.addRow(t("Offset topo"),self.top_offset)
         self.height=self._spin(0.10);form.addRow(t("Altura"),self.height)
         self.section_type=QComboBox();self.section_type.addItem(t("Simples"),"simple");self.section_type.addItem(t("Perfil complexo"),"complex");self.section_type.currentIndexChanged.connect(self.section_type_changed);form.addRow(t("Seção"),self.section_type)
         self.profile=QComboBox();self.profile.addItem(t("Retangular"),"rect");self.profile.addItem(t("Circular"),"circle");self.profile.currentIndexChanged.connect(self.values_changed);form.addRow(t("Forma"),self.profile)
@@ -70,12 +71,12 @@ class ColumnController(QWidget):
         self.inclination_azimuth=QDoubleSpinBox();self.inclination_azimuth.setLocale(ui_locale());self.inclination_azimuth.setDecimals(2);self.inclination_azimuth.setRange(-360,360);self.inclination_azimuth.setSingleStep(5);self.inclination_azimuth.setSuffix("°");self.inclination_azimuth.setKeyboardTracking(False);self.inclination_azimuth.valueChanged.connect(self.values_changed);form.addRow(t("Direção segmento"),self.inclination_azimuth)
         self.curvature=self._spin(0.05,-MAX_DIM,MAX_DIM);form.addRow(t("Flecha / curvatura"),self.curvature)
         self.rotation=QDoubleSpinBox();self.rotation.setLocale(ui_locale());self.rotation.setDecimals(2);self.rotation.setRange(-360,360);self.rotation.setSingleStep(5);self.rotation.setSuffix("°");self.rotation.setKeyboardTracking(False);self.rotation.valueChanged.connect(self.values_changed);form.addRow(t("Rotação"),self.rotation)
-        self.material=QComboBox();self.material.currentIndexChanged.connect(self.values_changed);self.material.setToolTip("Material nomeado do IngeTrazo aplicado às faces do pilar. IfcMaterial ainda depende do exportador do programa.");form.addRow(t("Material"),self.material)
+        self.material=MaterialPickerCombo();self.material.currentIndexChanged.connect(self.values_changed);self.material.setToolTip('Named IngeTrazo material applied to the column faces. IfcMaterial still depends on the exporter.');form.addRow(t("Material"),self.material)
         anchor_box=QWidget();grid=QGridLayout(anchor_box);grid.setContentsMargins(0,0,0,0);grid.setSpacing(2);self.anchor_buttons={}
         matrix=[["tl","tc","tr"],["ml","mc","mr"],["bl","bc","br"]]
         for r,row in enumerate(matrix):
             for c,key in enumerate(row):
-                b=QToolButton(anchor_box);b.setText("●");b.setCheckable(True);b.setAutoExclusive(True);b.setFixedSize(27,27);b.setToolTip("Ponto de inserção do pilar");b.clicked.connect(lambda _=False,k=key:self.anchor_changed(k));grid.addWidget(b,r,c);self.anchor_buttons[key]=b
+                b=QToolButton(anchor_box);b.setText("●");b.setCheckable(True);b.setAutoExclusive(True);b.setFixedSize(27,27);b.setToolTip('Column insertion point');b.clicked.connect(lambda _=False,k=key:self.anchor_changed(k));grid.addWidget(b,r,c);self.anchor_buttons[key]=b
         form.addRow(t("Eixo de referência"),anchor_box)
         self.hint=QLabel();self.hint.setWordWrap(True);lay.addWidget(self.hint);self.feedback=QLabel();self.feedback.setWordWrap(True);lay.addWidget(self.feedback);lay.addStretch()
         ver=QLabel(f"{t('Pilares paramétricos')} · v{__version__}");ver.setStyleSheet("color:#777;font-size:9pt;");lay.addWidget(ver)
@@ -88,14 +89,8 @@ class ColumnController(QWidget):
         self.action=QAction(column_icon(),t("Pilar paramétrico"),self.app.window);self.action.setCheckable(True);self.action.setToolTip(t("Pilar paramétrico vertical\nSeção simples retangular/circular; estrutura preparada para perfil complexo; níveis e offsets."))
         register_tool(self.app,self.tool,self.action,key=COLUMN_TOOL_KEY);register_tool(self.app,self.height_tool,key=COLUMN_HEIGHT_TOOL_KEY)
         register_tool(self.app,self.move_tool,key=COLUMN_MOVE_TOOL_KEY);register_tool(self.app,self.curve_tool,key=COLUMN_CURVE_TOOL_KEY);register_tool(self.app,self.incline_tool,key=COLUMN_INCLINE_TOOL_KEY);register_tool(self.app,self.station_z_tool,key=COLUMN_STATION_Z_TOOL_KEY);self.action.triggered.connect(self.start_drawing)
-        if self.wall_controller is not None and hasattr(self.wall_controller,"toolbar"):
-            self.wall_controller.toolbar.addAction(self.action)
-            if hasattr(self.wall_controller,"fit_toolbar"): self.wall_controller.fit_toolbar()
-            m=getattr(self.wall_controller,"arch_menu",None)
-            if m is not None:m.addAction(self.action)
-        else:
-            m=self.app.add_menu(t("Ferramentas arquitetônicas"))
-            if m is not None:m.addAction(self.action)
+        m=self.wall_controller.arch_menu if self.wall_controller is not None else self.app.add_menu(t("Ferramentas arquitetônicas"))
+        if m is not None:m.addAction(self.action)
 
     def _make_context_palette(self):
         self.context_palette=RadialPalette(self.app.window,popup=False,role="edit");row=self.context_palette.row
@@ -359,12 +354,12 @@ class ColumnController(QWidget):
             if self.defaults.get("section_type")=="complex" and not self.defaults.get("profile_ref"):raise ColumnError("Escolha um Perfil Complexo antes de inserir o pilar.")
             if self.app.workspace() is not None:raise ColumnError("Volte ao modelo para inserir pilares.")
         except Exception as exc:self.action.setChecked(False);self.app.viewport.flash_status(t(str(exc)),6000);return
-        self.app.scene.clear_selection();activate_column(self.app);self.schedule_refresh();self.message("Clique no ponto de inserção do pilar.");self.app.viewport.setFocus()
+        self.app.scene.clear_selection();activate_column(self.app);self.schedule_refresh();self.app.viewport.setFocus()
     def stop_drawing(self):activate_select(self.app);self.action.setChecked(False);self.schedule_refresh()
     def return_to_select(self):activate_select(self.app);self.schedule_refresh();self.app.viewport.setFocus()
     def message(self,text,error=False):
         shown=t(text);self.feedback.setText(shown);self.feedback.setStyleSheet("color:#b00020;" if error else "")
-        if text:self.app.viewport.flash_status(shown,8000 if error else 15000)
+        if text:self.app.viewport.flash_status(shown,15000)
 
     @staticmethod
     def _seg_distance(px,py,a,b):

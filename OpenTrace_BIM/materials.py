@@ -126,9 +126,71 @@ def _language_key():
         return ""
 
 
+
+# These are lightweight, redistributable OpenTrace appearance defaults, NOT
+# classifications or engineering specifications. The user's own material
+# names/recipes always take priority in the document registry.
+_DEFAULT_TEXTURES = {
+    "OpenTrace · Light Plaster": ("render_plaster.png", (0.40, 0.40)),
+    "OpenTrace · Clay Block": ("clay_block.png", (0.60, 0.30)),
+    "OpenTrace · Clay Brick": ("clay_brick.png", (0.24, 0.075)),
+    "OpenTrace · Concrete Block": ("concrete_block.png", (0.60, 0.30)),
+    "OpenTrace · Ceramic Tile": ("ceramic_tile.png", (0.60, 0.60)),
+    "OpenTrace · Gypsum Board": ("gypsum_board.png", (0.45, 0.45)),
+    "OpenTrace · Concrete": ("concrete.png", (0.55, 0.55)),
+    "OpenTrace · Tile Mortar": ("tile_mortar.png", (0.40, 0.40)),
+    "OpenTrace · Steel": ("steel.png", (0.45, 0.45)),
+    "OpenTrace · Mineral Insulation": ("insulation.png", (0.40, 0.40)),
+}
+
+
+@lru_cache(maxsize=1)
+def _opentrace_default_catalog():
+    texture_dir = Path(__file__).resolve().parent / "assets" / "default_materials"
+    out = {}
+    for name, (filename, (sw, sh)) in _DEFAULT_TEXTURES.items():
+        path = texture_dir / filename
+        # Never register a dangling texture path after an incomplete install.
+        if path.is_file():
+            out[name] = {"name": name, "color": None,
+                         "texture": {"path": str(path), "sw": sw, "sh": sh, "rot": 0.0},
+                         "opacity": None}
+    return out
+
+
+def default_wall_layer_material(layer):
+    """A visual starter material for recognized physical layers of BUILT-IN presets.
+
+    Do not run this on existing project layers: None may be intentional, and
+    user-painted faces or custom recipes must never change on re-open.
+    """
+    name = str(layer.get("name") or "").casefold()
+    if "clay brick" in name or "clay masonry brick" in name:
+        return "OpenTrace · Clay Brick"
+    if "clay block" in name or "ceramic block" in name:
+        return "OpenTrace · Clay Block"
+    if "concrete block" in name:
+        return "OpenTrace · Concrete Block"
+    if "render" in name or "plaster" in name or "reboco" in name:
+        return "OpenTrace · Light Plaster"
+    if "ceramic tile" in name or "porcelain tile" in name:
+        return "OpenTrace · Ceramic Tile"
+    if "adhesive" in name or "mortar" in name:
+        return "OpenTrace · Tile Mortar"
+    if "gypsum board" in name:
+        return "OpenTrace · Gypsum Board"
+    if "insulation" in name:
+        return "OpenTrace · Mineral Insulation"
+    if "stud" in name or "steel" in name:
+        return "OpenTrace · Steel"
+    if "concrete" in name or "screed" in name:
+        return "OpenTrace · Concrete"
+    return None
+
+
 def material_catalog(scene=None):
     """Return native-library recipes merged with materials in this document."""
-    catalog = dict(_host_library_catalog(_language_key()))
+    catalog = {**_host_library_catalog(_language_key()), **_opentrace_default_catalog()}
     registry = getattr(scene, "materials", None) if scene is not None else None
     if registry:
         for name, mat in registry.items():
@@ -145,6 +207,7 @@ def material_catalog(scene=None):
 def material_names(scene):
     """All selectable material identities: document + complete host library."""
     names = set(_host_library_catalog(_language_key()).keys())
+    names.update(_opentrace_default_catalog().keys())
     registry = getattr(scene, "materials", None) or {}
     names.update(str(name) for name in registry.keys())
     return sorted(names, key=str.casefold)
@@ -170,7 +233,9 @@ def ensure_material(scene, name):
     mat = registry.get(name)
     if mat is not None:
         return mat
-    recipe = _host_library_catalog(_language_key()).get(str(name))
+    recipe = _opentrace_default_catalog().get(str(name))
+    if recipe is None:
+        recipe = _host_library_catalog(_language_key()).get(str(name))
     if recipe is None:
         return None
     mat = _material_from_recipe(name, recipe)

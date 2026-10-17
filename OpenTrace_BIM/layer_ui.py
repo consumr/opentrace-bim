@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import copy
 
+from .materials_ui import MaterialPickerCombo
+from .wall_visuals import LayerStackPreview
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -57,8 +59,8 @@ class LayerEditor(QWidget):
         self._loading = False
         self._material_names = []
         self._selection_hint = None
-        self.before_label = before_label
-        self.after_label = after_label
+        self.before_label = t(before_label)
+        self.after_label = t(after_label)
         self._layers = normalize_layers(None)
 
         root = QVBoxLayout(self)
@@ -78,7 +80,7 @@ class LayerEditor(QWidget):
         self.expand_btn.setFixedSize(28, 26)
         self.composition_save_btn.setToolTip(t("Salva a pilha atual como composição reutilizável."))
         self.composition_delete_btn.setToolTip(t("Exclui a composição selecionada da biblioteca pessoal."))
-        self.expand_btn.setToolTip(t("Abre o compositor de camadas em uma janela maior e redimensionável."))
+        self.expand_btn.setToolTip("Open Material Composer in a resizable window.")
         # Expansion is first and fixed-width so it cannot disappear when the
         # narrow architecture sidebar clips the right side of this row.
         library_row.addWidget(self.expand_btn)
@@ -101,9 +103,9 @@ class LayerEditor(QWidget):
         self.table = QTableWidget(0, 5, self)
         self.table.setHorizontalHeaderLabels([
             t("Nome"),
-            t("Função"),
+            "Function",
             t("Material"),
-            t("Esp."),
+            "Thk.",
             t("Núcleo"),
         ])
         self.table.setAlternatingRowColors(True)
@@ -138,7 +140,7 @@ class LayerEditor(QWidget):
         self.table.setColumnWidth(self.COL_CORE, 62)
 
         self.table.horizontalHeaderItem(self.COL_NAME).setToolTip(
-            t("Nome livre da camada, por exemplo: Reboco externo.")
+            "Freeform layer name, e.g. Exterior render."
         )
         self.table.horizontalHeaderItem(self.COL_FUNCTION).setToolTip(
             t("Função construtiva/BIM da camada.")
@@ -156,6 +158,8 @@ class LayerEditor(QWidget):
         self.table.itemChanged.connect(self._item_changed)
         self.table.currentCellChanged.connect(self._current_cell_changed)
         root.addWidget(self.table)
+        self.stack_preview=LayerStackPreview(self)
+        root.addWidget(self.stack_preview)
 
         self.after_marker = QLabel(f"▼  {t(after_label).upper()}")
         root.addWidget(self.after_marker)
@@ -212,9 +216,18 @@ class LayerEditor(QWidget):
         so the floating window uses a second editor and mirrors every change
         back immediately.  Closing it leaves the sidebar exactly where it was.
         """
+        previous = getattr(self, "_floating_editor", None)
+        if previous is not None:
+            try:
+                if previous.isVisible():
+                    previous.raise_()
+                    previous.activateWindow()
+                    return
+            except RuntimeError:  # C++ QDialog was deleted on close
+                pass
         dlg = QDialog(self.window())
-        dlg.setWindowTitle(t("Compositor de camadas"))
-        dlg.resize(920, 520)
+        dlg.setWindowTitle("Material Composer")
+        dlg.resize(920, 690)
         lay = QVBoxLayout(dlg)
         ed = LayerEditor(dlg, before_label=self.before_label, after_label=self.after_label)
         ed.table.setMaximumHeight(16777215)
@@ -398,7 +411,7 @@ class LayerEditor(QWidget):
         return combo
 
     def _material_combo(self, layer):
-        combo = QComboBox(self.table)
+        combo = MaterialPickerCombo(self.table)
         combo.addItem(t("Padrão"), None)
 
         current = layer.get("material_name")
@@ -507,6 +520,7 @@ class LayerEditor(QWidget):
         self.total.setText(
             f"{t('Espessura total')}: {total} m  ·  {count} {noun}"
         )
+        self.stack_preview.set_layers(self._layers)
 
     def _update_toolbar(self):
         row = self._current_row()

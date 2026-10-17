@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 import math
 
+from .materials_ui import MaterialPickerCombo
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap, QVector3D
-from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QMenu, QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QToolButton, QVBoxLayout, QWidget)
 from core.snap import SnapResult, COLOR_ENDPOINT, COLOR_ON_EDGE
 
 from . import __version__
@@ -35,7 +36,7 @@ from .materials import material_names
 from .palette import RadialPalette
 from .layer_ui import LayerEditor
 from .slab_opening import SlabOpeningTool
-from .slab_opening_edit import (InsertOpeningVertexTool, StretchOpeningEdgeTool,
+from .slab_opening_edit import (StickyOpeningFunction, InsertOpeningVertexTool, StretchOpeningEdgeTool,
                                 MoveOpeningVertexTool, CurveOpeningEdgeTool,
                                 ChamferOpeningVertexTool, FilletOpeningVertexTool,
                                 OffsetOpeningTool, MoveOpeningTool)
@@ -48,6 +49,7 @@ from .slab_model import (DEFAULTS, MAX_DIM, SlabError, line_edge, read_slab,
                          slab_edge_specs, slab_path_world, slab_polygon_world, slab_openings_world,
                          slab_record, sample_boundary, normalize_edge_specs)
 from .slab_tool import SlabTool
+from .step_guide import show_step
 from .widgets import FlexibleDoubleSpinBox as QDoubleSpinBox
 from .i18n import t, ui_locale
 from .snap_utils import angular_snap_result
@@ -100,6 +102,7 @@ class SlabController(QObject):
         self.opening_fillet_tool = FilletOpeningVertexTool(self)
         self.opening_offset_tool = OffsetOpeningTool(self)
         self.opening_move_tool = MoveOpeningTool(self)
+        self.sticky = StickyOpeningFunction()
         self.target = None; self._loading = False; self._queued = False
         self._ui_ready = False; self._init_error = None
         self._make_action()
@@ -120,10 +123,10 @@ class SlabController(QObject):
         form = QFormLayout(); lay.addLayout(form)
         self.level = QComboBox(); self.level.currentIndexChanged.connect(self.level_changed); form.addRow(t("Nível"), self.level)
         self.offset = QDoubleSpinBox(); self.offset.setLocale(ui_locale()); self.offset.setDecimals(4); self.offset.setRange(-MAX_DIM, MAX_DIM); self.offset.setSingleStep(0.05); self.offset.setSuffix(" m"); self.offset.setKeyboardTracking(False); self.offset.valueChanged.connect(self.values_changed)
-        self.offset.setToolTip("Com Cota livre, este valor é a cota absoluta da referência. Com nível, é o deslocamento em relação ao nível."); form.addRow(t("Cota / offset"), self.offset)
+        self.offset.setToolTip("With Free elevation, this value is absolute elevation. With a linked level, it is an offset."); form.addRow(t("Cota / offset"), self.offset)
         self.thickness = QDoubleSpinBox(); self.thickness.setLocale(ui_locale()); self.thickness.setDecimals(4); self.thickness.setRange(0.001, MAX_DIM); self.thickness.setSingleStep(0.01); self.thickness.setSuffix(" m"); self.thickness.setKeyboardTracking(False); self.thickness.valueChanged.connect(self.values_changed); form.addRow(t("Espessura"), self.thickness)
-        self.reference_plane = QComboBox(); self.reference_plane.addItem(t("Inferior"), "bottom"); self.reference_plane.addItem(t("Superior"), "top"); self.reference_plane.currentIndexChanged.connect(self.values_changed); self.reference_plane.setToolTip("A linha de referência da laje fica na face inferior ou superior; não existe referência central."); form.addRow(t("Referência"), self.reference_plane)
-        self.material=QComboBox();self.material.currentIndexChanged.connect(self.values_changed);self.material.setToolTip("Material nomeado do IngeTrazo aplicado às faces da laje simples. Na laje composta cada camada pode ter seu material.");form.addRow(t("Material"),self.material)
+        self.reference_plane = QComboBox(); self.reference_plane.addItem(t("Inferior"), "bottom"); self.reference_plane.addItem(t("Superior"), "top"); self.reference_plane.currentIndexChanged.connect(self.values_changed); self.reference_plane.setToolTip('Slab reference plane is either bottom or top; there is no center reference.'); form.addRow(t("Referência"), self.reference_plane)
+        self.material=MaterialPickerCombo();self.material.currentIndexChanged.connect(self.values_changed);self.material.setToolTip("Named IngeTrazo material applied to a simple slab. A composite slab can use a different material for each layer.");form.addRow(t("Material"),self.material)
         self.structure=QComboBox();self.structure.addItem(t("Simples"),"simple");self.structure.addItem(t("Composta / camadas"),"composite");self.structure.currentIndexChanged.connect(self.structure_changed);form.addRow(t("Estrutura"),self.structure)
         self.layer_editor=LayerEditor(self.panel,before_label="Abaixo",after_label="Acima");self.layer_editor.changed.connect(self.layers_changed);lay.addWidget(self.layer_editor);self.layer_editor.hide()
         self.hint = QLabel(); self.hint.setWordWrap(True); lay.addWidget(self.hint)
@@ -159,18 +162,9 @@ class SlabController(QObject):
         self.action.triggered.connect(self.start_drawing)
         self.simple_action=QAction(slab_icon(),t("Laje simples"),self.app.window);self.simple_action.triggered.connect(lambda:self.start_structure("simple"))
         self.composite_action=QAction(composite_slab_icon(),t("Laje composta"),self.app.window);self.composite_action.triggered.connect(lambda:self.start_structure("composite"))
-        self.type_menu=QMenu(self.app.window);self.type_menu.addAction(self.simple_action);self.type_menu.addAction(self.composite_action)
-        self.menu_button=QToolButton(self.app.window);self.menu_button.setDefaultAction(self.action);self.menu_button.setMenu(self.type_menu);self.menu_button.setPopupMode(QToolButton.MenuButtonPopup);self.menu_button.setToolTip(t("Laje — use a seta para escolher simples ou composta."))
-        if self.wall_controller is not None and hasattr(self.wall_controller, "toolbar"):
-            self.wall_controller.toolbar.addWidget(self.menu_button)
-            if hasattr(self.wall_controller,"fit_toolbar"): self.wall_controller.fit_toolbar()
-            menu = getattr(self.wall_controller, "arch_menu", None)
-            if menu is not None:
-                sub=menu.addMenu(t("Laje"));sub.addAction(self.simple_action);sub.addAction(self.composite_action)
-        else:
-            menu = self.app.add_menu(t("Ferramentas arquitetônicas"))
-            if menu is not None:
-                sub=menu.addMenu(t("Laje"));sub.addAction(self.simple_action);sub.addAction(self.composite_action)
+        menu = self.wall_controller.arch_menu if self.wall_controller is not None else self.app.add_menu(t("Ferramentas arquitetônicas"))
+        if menu is not None:
+            sub=menu.addMenu(t("Laje"));sub.addAction(self.simple_action);sub.addAction(self.composite_action)
 
     def _make_mode_palette(self):
         # Creation-method palette: now radial too, matching the edit palettes.
@@ -276,7 +270,7 @@ class SlabController(QObject):
     def _update_structure_ui(self):
         composite=(self.structure.currentData()=="composite")
         self.layer_editor.setVisible(composite);self.thickness.setEnabled(not composite);self.material.setEnabled(not composite)
-        if composite:self.hint.setText("Laje composta: a espessura total é a soma das camadas; o hotspot de espessura fica desativado.")
+        if composite:self.hint.setText('Composite slab: total thickness is the sum of the layers; the thickness hotspot is disabled.')
 
     def structure_changed(self,*_):
         if self._loading:return
@@ -306,7 +300,7 @@ class SlabController(QObject):
         # simple/composite structure.  One click must be enough to switch.
         if self.app.viewport.active_tool is self.tool:
             self.schedule_refresh()
-            self.message("Clique no primeiro ponto da laje. Retângulo por diagonal é o modo padrão.")
+            show_step(self.tool, self.app.viewport, "slab.create.start")
             self.app.viewport.setFocus()
         else:
             self.start_drawing()
@@ -351,10 +345,10 @@ class SlabController(QObject):
                 if not self.layer_editor.user_is_editing():
                     self.layer_editor.set_layers(vals.get("layers",[]),vals["thickness"],vals.get("material_name"))
                 self._loading=False;self._update_structure_ui()
-                self.hint.setText("Clique na referência: aresta = inserir/estender/curvar/offset/mover laje; vértice = mover/excluir/chanfrar/fillet; hotspot superior = espessura.");self.app.show_panel(self.dock)
+                self.hint.setText('Click the reference: edge = inserir/estender/curve/offset/mover slab; vertex = mover/delete/chanfrar/fillet; hotspot superior = thickness.');self.app.show_panel(self.dock)
             except SlabError as exc:self._loading=False;self.message(str(exc),error=True)
         elif self.app.viewport.active_tool is self.tool:
-            self.hint.setText("Desenhe no plano horizontal. O modo padrão é retângulo por diagonal.");self.app.show_panel(self.dock)
+            self.hint.setText('Draw on the horizontal plane. The default mode is rectangle by diagonal.');self.app.show_panel(self.dock)
         self.app.viewport.update()
 
     def start_drawing(self,*_):
@@ -364,15 +358,32 @@ class SlabController(QObject):
             root_edit_allowed(self.app.scene)
             if self.app.workspace() is not None:raise SlabError("Volte ao modelo para desenhar lajes.")
         except SlabError as exc:self.action.setChecked(False);self.app.viewport.flash_status(t(str(exc)),6000);return
-        self.app.scene.clear_selection();self.defaults["openings"]=[];self.tool.reset();activate_slab(self.app);self.schedule_refresh();self.message("Clique no primeiro ponto da laje. Retângulo por diagonal é o modo padrão.");self.app.viewport.setFocus()
+        self.app.scene.clear_selection();self.defaults["openings"]=[];self.tool.reset();activate_slab(self.app);self.schedule_refresh();self.app.viewport.setFocus()
 
     def stop_drawing(self):self.hide_mode_palette();activate_select(self.app);self.action.setChecked(False);self.schedule_refresh()
-    def return_to_select(self):activate_select(self.app);self.schedule_refresh();self.app.viewport.setFocus()
+    def clear_sticky(self):
+        self.sticky.clear()
+
+    def return_to_select(self):
+        self.clear_sticky()
+        activate_select(self.app)
+        self.schedule_refresh()
+        self.app.viewport.setFocus()
+
+    def edit_finished(self, slab, opening_index):
+        """Keep the edited slab selected and wait for the next matching part."""
+        self.sticky.finished(self.app.viewport.active_tool)
+        if self.sticky.waiting:
+            show_step(self.sticky.tool, self.app.viewport, "slab_opening.edit.after")
+        self.schedule_refresh()
+        self.app.viewport.update()
     def message(self,text,error=False):
+        if not error and self.sticky.tool is self.app.viewport.active_tool:
+            return
         shown=t(text)
         if hasattr(self,"feedback"):
             self.feedback.setText(shown);self.feedback.setStyleSheet("color:#b00020;" if error else "")
-        if text:self.app.viewport.flash_status(shown,8000 if error else 15000)
+        if text:self.app.viewport.flash_status(shown,15000)
 
     @staticmethod
     def _pixel_segment_nearest(px,py,a,b):
@@ -488,15 +499,48 @@ class SlabController(QObject):
         return angular_snap_result(viewport,snap,px,py)
 
     def eventFilter(self,obj,event):
-        if obj is self.app.viewport and event.type()==QEvent.MouseButtonPress and event.button()==Qt.LeftButton:
+        vp = self.app.viewport
+        if obj is not vp:
+            return False
+        if (event.type() == QEvent.KeyPress and event.key() == Qt.Key_Escape
+                and self.sticky.tool is not None and vp.active_tool is self.sticky.tool):
+            self.return_to_select()
+            return True
+        if (event.type() == QEvent.MouseButtonPress and
+                event.button() in (Qt.LeftButton, Qt.RightButton) and
+                self.sticky.waiting and vp.active_tool is self.sticky.tool):
+            slabs = selected_slabs(self.app.scene)
+            hit = (self._reference_context(event.position().x(), event.position().y(), slabs[0])
+                   if len(slabs) == 1 else None)
+            if hit is None or hit[0] not in ("opening_edge", "opening_vertex"):
+                # Ignore clicks without a matching opening handle; the
+                # selected function remains active until Esc or another tool.
+                return True
+            kind, index, anchor = hit
+            if event.button() == Qt.RightButton or not self.sticky.ready(vp.active_tool, kind):
+                self.show_edit_palette(event.globalPosition().toPoint(), slabs[0], kind, index, anchor)
+                return True
+            try:
+                self.sticky.tool.arm(slabs[0], index, anchor)
+            except SlabError as exc:
+                self.message(str(exc), error=True)
+                return True
+            self.sticky.armed()
+            show_step(self.sticky.tool, vp, self.sticky.tool.function_step_id)
+            vp.update()
+            return True
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
             if self.edit_palette.isVisible():
                 self.edit_palette.hide();self._edit_slab=None;self._edit_kind=None;self._edit_index=None;self._edit_anchor=None
-            if event.modifiers()==Qt.NoModifier:
-                vp=self.app.viewport;select_tool=host_tool(self.app, "select");slabs=selected_slabs(self.app.scene)
-                if vp.active_tool is select_tool and len(slabs)==1:
-                    hit=self._reference_context(event.position().x(),event.position().y(),slabs[0])
+            if event.modifiers() == Qt.NoModifier:
+                select_tool = host_tool(self.app, "select")
+                slabs = selected_slabs(self.app.scene)
+                if vp.active_tool is select_tool and len(slabs) == 1:
+                    hit = self._reference_context(event.position().x(), event.position().y(), slabs[0])
                     if hit is not None:
-                        kind,index,anchor=hit;self.show_edit_palette(event.globalPosition().toPoint(),slabs[0],kind,index,anchor);return True
+                        kind,index,anchor = hit
+                        self.show_edit_palette(event.globalPosition().toPoint(), slabs[0], kind, index, anchor)
+                        return True
         return super().eventFilter(obj,event)
 
     def show_edit_palette(self,global_pos,slab,kind,index,anchor):
@@ -540,8 +584,37 @@ class SlabController(QObject):
 
     def _arm(self,tool,activator):
         self.edit_palette.hide()
-        try:tool.arm(self._edit_slab,self._edit_index,self._edit_anchor);activator(self.app);self.app.viewport.setFocus()
-        except SlabError as exc:self.message(str(exc),error=True)
+        try:
+            tool.arm(self._edit_slab, self._edit_index, self._edit_anchor)
+            opening_steps = {
+                self.opening_insert_tool: "slab_opening.edit.insert",
+                self.opening_stretch_tool: "slab_opening.edit.stretch",
+                self.opening_move_vertex_tool: "slab_opening.edit.move_vertex",
+                self.opening_curve_tool: "slab_opening.edit.curve",
+                self.opening_chamfer_tool: "slab_opening.edit.chamfer",
+                self.opening_fillet_tool: "slab_opening.edit.fillet",
+                self.opening_offset_tool: "slab_opening.edit.offset",
+                self.opening_move_tool: "slab_opening.edit.move.start",
+            }
+            if tool in opening_steps:
+                tool.function_step_id = opening_steps[tool]
+                tool.step_id = tool.function_step_id
+            if self.app.viewport.active_tool is not tool:
+                activator(self.app)
+            opening_tools = (
+                self.opening_insert_tool, self.opening_stretch_tool,
+                self.opening_move_vertex_tool, self.opening_curve_tool,
+                self.opening_chamfer_tool, self.opening_fillet_tool,
+                self.opening_offset_tool, self.opening_move_tool,
+            )
+            if tool in opening_tools:
+                self.sticky.choose(tool, self._edit_kind)
+                show_step(tool, self.app.viewport, tool.function_step_id)
+            else:
+                self.clear_sticky()
+            self.app.viewport.setFocus()
+        except SlabError as exc:
+            self.message(str(exc), error=True)
 
     def begin_insert_vertex(self):
         if self._edit_kind=="opening_edge": self._arm(self.opening_insert_tool,activate_slab_opening_insert_vertex)

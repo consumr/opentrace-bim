@@ -103,10 +103,10 @@ HEB = [
 def builtin_profiles():
     out=[]
     for family, rows, folder, source, catalog in (
-        ("gerdau_w", GERDAU_W, "Estruturais / Aço / Gerdau W", "Gerdau", "Perfis Estruturais W"),
-        ("ipe", IPE, "Estruturais / Aço / IPE", "ArcelorMittal / EN 10365", "IPE"),
-        ("hea", HEA, "Estruturais / Aço / HEA", "ArcelorMittal / EN 10365", "HEA"),
-        ("heb", HEB, "Estruturais / Aço / HEB", "ArcelorMittal / EN 10365", "HEB"),
+        ("gerdau_w", GERDAU_W, "Structural / Steel / Gerdau W", "Gerdau", "Structural W sections"),
+        ("ipe", IPE, "Structural / Steel / IPE", "ArcelorMittal / EN 10365", "IPE"),
+        ("hea", HEA, "Structural / Steel / HEA", "ArcelorMittal / EN 10365", "HEA"),
+        ("heb", HEB, "Structural / Steel / HEB", "ArcelorMittal / EN 10365", "HEB"),
     ):
         for name,d,bf,tw,tf in rows:
             slug=name.lower().replace(" ","").replace(",",".").replace("/","-")
@@ -120,11 +120,11 @@ def builtin_profiles():
             ))
 
     out.extend([
-        _profile("builtin:arch:baseboard:100x15","Rodapé 100 × 15 mm",_rect(15,100),"Arquitetônicos / Rodapés",category="baseboard"),
-        _profile("builtin:arch:baseboard:150x15","Rodapé 150 × 15 mm",_rect(15,150),"Arquitetônicos / Rodapés",category="baseboard"),
-        _profile("builtin:arch:trim:50x20","Faixa / Moldura 50 × 20 mm",_rect(20,50),"Arquitetônicos / Faixas & Molduras",category="trim"),
-        _profile("builtin:arch:handrail:42.4","Corrimão redondo Ø42,4 mm",_circle(42.4),"Arquitetônicos / Corrimãos",category="handrail"),
-        _profile("builtin:arch:handrail:40x60","Corrimão retangular 40 × 60 mm",_rect(40,60),"Arquitetônicos / Corrimãos",category="handrail"),
-        _profile("builtin:arch:wallcap:150x30","Cimalha / faixa de parede 150 × 30 mm",_rect(30,150),"Arquitetônicos / Parede",category="wall_profile"),
+        _profile("builtin:arch:baseboard:100x15","Baseboard 100 × 15 mm",_rect(15,100),"Architectural / Baseboards",category="baseboard"),
+        _profile("builtin:arch:baseboard:150x15","Baseboard 150 × 15 mm",_rect(15,150),"Architectural / Baseboards",category="baseboard"),
+        _profile("builtin:arch:trim:50x20","Trim / Molding 50 × 20 mm",_rect(20,50),"Architectural / Trims & Moldings",category="trim"),
+        _profile("builtin:arch:handrail:42.4","Round handrail Ø42.4 mm",_circle(42.4),"Architectural / Handrails",category="handrail"),
+        _profile("builtin:arch:handrail:40x60","Rectangular handrail 40 × 60 mm",_rect(40,60),"Architectural / Handrails",category="handrail"),
+        _profile("builtin:arch:wallcap:150x30","Wall cap / trim 150 × 30 mm",_rect(30,150),"Architectural / Wall",category="wall_profile"),
     ])
     return out

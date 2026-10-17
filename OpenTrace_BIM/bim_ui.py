@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from .bim import (ensure_spatial_ids, ifc_identity_data, load_document_data,
                   prepare_scene_identities, save_document_data, scan_scene,
                   set_ifc_metadata)
-from .ifc_export import EXPORT_PROFILES, IfcExportError, export_ifc
+from .ifc_export import EXPORT_PROFILES, IfcExportError, export_ifc, normalize_export_schema
 from .ifc_import import IfcImportError, import_ifc
 
 
@@ -22,6 +22,7 @@ class BimController:
         self.app = app
         self.action = None
         self.data = load_document_data(app)
+        self._document_source_signature = self._source_signature()
         self._refresh_queued = False
         self.panel = self._build_panel()
         try:
@@ -37,22 +38,65 @@ class BimController:
     def _build_panel(self):
         w = QWidget()
         root = QVBoxLayout(w); root.setContentsMargins(8, 8, 8, 8); root.setSpacing(9)
-        title = QLabel("<b style='font-size:14pt'>BIM / IFC</b><br><span style='color:#777'>Semântica openBIM sobre a geometria paramétrica do OpenTrace.</span>")
+        title = QLabel("<b style='font-size:14pt'>BIM / IFC</b><br><span style='color:#777'>openBIM semantics on top of OpenTrace parametric geometry.</span>")
         title.setWordWrap(True); root.addWidget(title)
 
-        project_box = QFrame(); project_box.setFrameShape(QFrame.StyledPanel)
-        form = QFormLayout(project_box); form.setContentsMargins(8, 8, 8, 8); form.setSpacing(6)
-        self.project_name = QLineEdit(); self.site_name = QLineEdit(); self.building_name = QLineEdit()
-        self.author = QLineEdit(); self.organization = QLineEdit(); self.description = QLineEdit()
-        form.addRow("Projeto", self.project_name); form.addRow("Terreno", self.site_name)
-        form.addRow("Edifício", self.building_name); form.addRow("Autor", self.author)
-        form.addRow("Organização", self.organization); form.addRow("Descrição", self.description)
-        root.addWidget(project_box)
+        # Project information is one separate page in the master sidebar.
+        # The same fields and document record remain authoritative for IFC.
+        self.project_panel = QWidget()
+        project_root = QVBoxLayout(self.project_panel)
+        project_root.setContentsMargins(10, 10, 10, 10)
+        project_root.setSpacing(9)
+        project_heading = QLabel("<b style='font-size:14pt'>Project information</b>")
+        project_root.addWidget(project_heading)
+        from .panel_sections import EditorSection
+        # The existing record fields stay exactly the same QObject instances.
+        # Only their presentation is reorganized into the approved areas.
+        self.project_name = QLineEdit()
+        self.client = QLineEdit()
+        self.location = QLineEdit()
+        self.description = QLineEdit()
+        self.author = QLineEdit()
+        self.organization = QLineEdit()
+        self.site_name = QLineEdit()
+        self.building_name = QLineEdit()
+
+        def project_section(title, rows):
+            content=QWidget(self.project_panel)
+            form=QFormLayout(content)
+            form.setContentsMargins(0,0,0,0);form.setSpacing(7)
+            form.setRowWrapPolicy(QFormLayout.WrapLongRows)
+            for label, field in rows:
+                form.addRow(label,field)
+            section=EditorSection(title,content,parent=self.project_panel)
+            project_root.addWidget(section)
+            return section
+
+        self.project_identity_section=project_section(
+            "Identification",
+            (("Project",self.project_name),("Client",self.client),
+             ("Location",self.location),("Description",self.description)))
+        self.project_people_section=project_section(
+            "Responsible parties",
+            (("Author",self.author),("Office / Organization",self.organization)))
+        self.project_structure_section=project_section(
+            "Project structure",
+            (("IFC site",self.site_name),("IFC building",self.building_name)))
+        self.project_levels_summary = QLabel()
+        self.project_levels_summary.setWordWrap(True)
+        project_root.addWidget(self.project_levels_summary)
+        project_root.addStretch(1)
 
         options = QFrame(); options.setFrameShape(QFrame.StyledPanel)
         opt = QVBoxLayout(options); opt.setContentsMargins(8, 8, 8, 8); opt.setSpacing(5)
-        opt.addWidget(QLabel("<b>Conteúdo IFC4</b>"))
-        profile_row=QHBoxLayout();profile_row.addWidget(QLabel("Perfil de exportação"))
+        opt.addWidget(QLabel("<b>IFC schema · independent of profile</b>"))
+        schema_row = QHBoxLayout(); schema_row.addWidget(QLabel('IFC version'))
+        self.export_schema = QComboBox()
+        self.export_schema.addItem('IFC4 (stable)', 'IFC4')
+        self.export_schema.addItem('IFC4.3 ADD2 (experimental · validate in target app)', 'IFC4X3_ADD2')
+        self.export_schema.setToolTip('IFC4.3 ADD2: architectural subset under testing; not buildingSMART certified')
+        schema_row.addWidget(self.export_schema, 1); opt.addLayout(schema_row)
+        profile_row=QHBoxLayout();profile_row.addWidget(QLabel('Export profile'))
         self.export_profile=QComboBox()
         for key,cfg in EXPORT_PROFILES.items():self.export_profile.addItem(cfg["label"],key)
         profile_row.addWidget(self.export_profile,1);opt.addLayout(profile_row)
@@ -63,22 +107,31 @@ class BimController:
         # pressing Export. Open/Import/Link live here too so all IFC ingress /
         # egress is one compact block.
         io_row=QHBoxLayout()
-        self.open_btn=QPushButton("Abrir IFC…");self.import_btn=QPushButton("Importar IFC…");self.link_btn=QPushButton("Vincular IFC…")
+        self.open_btn=QPushButton("Open IFC…");self.import_btn=QPushButton("Import IFC…");self.link_btn=QPushButton("Link IFC…")
         io_row.addWidget(self.open_btn);io_row.addWidget(self.import_btn);io_row.addWidget(self.link_btn);opt.addLayout(io_row)
         export_row=QHBoxLayout()
-        self.identify_btn=QPushButton("Preparar identidades IFC")
-        self.export_btn=QPushButton("Exportar IFC…")
+        self.identify_btn=QPushButton("Prepare IFC identities")
+        self.export_btn=QPushButton("Export IFC…")
         export_row.addWidget(self.identify_btn);export_row.addWidget(self.export_btn);opt.addLayout(export_row)
-        self.advanced_btn=QPushButton("BIM avançado · Psets · bibliotecas · relações · georreferenciamento…")
+        self.advanced_btn=QPushButton('Advanced BIM · Psets · libraries · relationships · georeferencing…')
         opt.addWidget(self.advanced_btn)
+        self.catalogue_status = QLabel('IFC catalogue: IFC4 built-in')
+        self.catalogue_status.setWordWrap(True)
+        opt.addWidget(self.catalogue_status)
+        self.migrate_catalogue_btn = QPushButton('Migrate IFC classification catalogue…')
+        self.migrate_catalogue_btn.setObjectName('opentrace_migrate_ifc_catalogue')
+        self.migrate_catalogue_btn.setToolTip('Choose destination catalogue, compare equivalences, and review unresolved codes before committing the migration')
+        opt.addWidget(self.migrate_catalogue_btn)
+        self.manage_catalogue_btn = QPushButton('Manage / install classification catalogues…')
+        opt.addWidget(self.manage_catalogue_btn)
 
-        self.psets = QCheckBox("Property Sets IFC + paramétricos OpenTrace")
-        self.layers = QCheckBox("Materiais e composições por IfcMaterialLayerSet")
-        self.openings = QCheckBox("Aberturas como IfcOpeningElement + relação de vazio")
-        self.quantities = QCheckBox("Quantidades IFC (Qto_*) + quantidades preservadas de importação")
-        self.styles = QCheckBox("Aparências IFC de materiais (cor / transparência)")
-        self.roundtrip = QCheckBox("Round-trip OpenTrace paramétrico dentro do IFC")
-        self.repmaps = QCheckBox("RepresentationMap para instâncias/componentes repetidos")
+        self.psets = QCheckBox('IFC Property Sets + OpenTrace parametrics')
+        self.layers = QCheckBox('Materials and assemblies via IfcMaterialLayerSet')
+        self.openings = QCheckBox('Openings as IfcOpeningElement + void relations')
+        self.quantities = QCheckBox('IFC quantities (Qto_*) + imported quantities')
+        self.styles = QCheckBox('IFC material appearances (color / transparency)')
+        self.roundtrip = QCheckBox('OpenTrace parametric round-trip within IFC')
+        self.repmaps = QCheckBox('RepresentationMap for repeated instances/components')
         opt.addWidget(self.psets); opt.addWidget(self.layers); opt.addWidget(self.openings); opt.addWidget(self.quantities);opt.addWidget(self.styles);opt.addWidget(self.roundtrip);opt.addWidget(self.repmaps)
         root.addWidget(options)
 
@@ -92,46 +145,91 @@ class BimController:
         self.element_name = QLineEdit(); self.element_type = QLineEdit(); self.element_predefined = QComboBox()
         self.classification_system = QLineEdit(); self.classification_code = QLineEdit()
         self.common_reference = QLineEdit(); self.common_status = QComboBox()
-        self.common_status.addItem("Não definido", None)
-        for code, label in (("NEW", "Novo"), ("EXISTING", "Existente"), ("DEMOLISH", "Demolir"), ("TEMPORARY", "Temporário")):
+        self.common_status.addItem('Not defined', None)
+        for code, label in (("NEW", "New"), ("EXISTING", "Existing"), ("DEMOLISH", "To demolish"), ("TEMPORARY", "Temporary")):
             self.common_status.addItem(label, code)
         self.common_external = QComboBox(); self.common_loadbearing = QComboBox()
         for combo in (self.common_external, self.common_loadbearing):
-            combo.addItem("Não definido", None); combo.addItem("Sim", True); combo.addItem("Não", False)
+            combo.addItem('Not defined', None); combo.addItem("Yes", True); combo.addItem('No', False)
         self.common_fire = QLineEdit()
-        element_form.addRow("Classe IFC", self.element_class); element_form.addRow("GlobalId", self.element_guid)
-        element_form.addRow("Nome IFC", self.element_name); element_form.addRow("Tipo", self.element_type)
+        element_form.addRow("IFC class", self.element_class); element_form.addRow("GlobalId", self.element_guid)
+        element_form.addRow('IFC name', self.element_name); element_form.addRow("Type", self.element_type)
         element_form.addRow("PredefinedType", self.element_predefined)
-        element_form.addRow("Classificação", self.classification_system); element_form.addRow("Código", self.classification_code)
-        element_form.addRow(QLabel("<b>Propriedades IFC comuns</b>"))
+        element_form.addRow('Primary classification', self.classification_system); element_form.addRow('Primary code', self.classification_code)
+        self.classification_browser_btn = QPushButton('Search and assign codes · multiple systems…')
+        element_form.addRow('', self.classification_browser_btn)
+        element_form.addRow(QLabel('<b>Common IFC properties</b>'))
         element_form.addRow("Reference", self.common_reference); element_form.addRow("Status", self.common_status)
-        element_form.addRow("Externo", self.common_external); element_form.addRow("Load bearing", self.common_loadbearing)
+        element_form.addRow("External", self.common_external); element_form.addRow("Load bearing", self.common_loadbearing)
         element_form.addRow("Fire rating", self.common_fire)
-        self.apply_element_btn = QPushButton("Aplicar dados BIM ao selecionado")
+        self.apply_element_btn = QLabel("Changes are saved on Enter, focus change or option selection.")
+        self.apply_element_btn.setWordWrap(True)
         element_form.addRow(self.apply_element_btn); root.addWidget(element_box)
         info = QLabel(
-            "As formas são exportadas a partir da geometria OpenTrace já resolvida. "
-            "Curvas, inclinações, perfis, furos e junções não são reconstruídos pelo modelador de parede do Bonsai."
+            'Shapes are exported from already-resolved OpenTrace geometry. Curves, inclinations, profiles, holes and junctions are not rebuilt by the Bonsai wall modeller.'
         )
         info.setWordWrap(True); info.setStyleSheet("color:#777;"); root.addWidget(info)
 
-        self.status = QLabel("IFC4 · exportação por perfil · Open/Import/Link sem alterar o core")
+        self.status = QLabel('IFC4 stable / IFC4.3 experimental · profile-based export')
         self.status.setWordWrap(True); self.status.setStyleSheet("color:#666;"); root.addWidget(self.status)
         root.addStretch(1)
 
-        for edit in (self.project_name, self.site_name, self.building_name, self.author, self.organization, self.description):
+        for edit in (self.project_name, self.client, self.location, self.site_name, self.building_name, self.author, self.organization, self.description):
             edit.editingFinished.connect(self.save)
         for check in (self.psets, self.layers, self.openings, self.quantities, self.styles, self.roundtrip, self.repmaps):
             check.toggled.connect(self.save)
         self.export_profile.currentIndexChanged.connect(self.profile_changed)
+        self.export_schema.currentIndexChanged.connect(self.schema_changed)
         self.open_btn.clicked.connect(lambda:self._choose_ifc("open",False))
         self.import_btn.clicked.connect(lambda:self._choose_ifc("import",False))
         self.link_btn.clicked.connect(lambda:self._choose_ifc("import",True))
         self.identify_btn.clicked.connect(self.prepare_identities)
         self.export_btn.clicked.connect(self.export)
         self.advanced_btn.clicked.connect(self.open_advanced)
-        self.apply_element_btn.clicked.connect(self.apply_selected_metadata)
+        self.migrate_catalogue_btn.clicked.connect(self.migrate_catalogue)
+        self.manage_catalogue_btn.clicked.connect(self.manage_catalogues)
+        self.classification_browser_btn.clicked.connect(self.open_classification_browser)
+        for field in (self.element_name, self.element_type, self.classification_system,
+                      self.classification_code, self.common_reference, self.common_fire):
+            field.editingFinished.connect(self.apply_selected_metadata)
+        for combo in (self.element_predefined, self.common_status,
+                      self.common_external, self.common_loadbearing):
+            combo.activated.connect(self.apply_selected_metadata)
         return w
+
+    def manage_catalogues(self):
+        from .classification_catalogue_dialog import CatalogueSourcesDialog
+        from .classification_assignments import extend_project_catalogue
+        from .bim import save_document_data
+        dlg = CatalogueSourcesDialog([], self.panel)
+        if not dlg.exec():
+            return
+        try:
+            newdata = load_document_data(self.app)
+            # Validate all before committing any of them to the project.
+            for catalogue in dlg.catalogues:
+                newdata = extend_project_catalogue(newdata, catalogue)
+            self.data = save_document_data(self.app, newdata)
+            self.refresh()
+        except (TypeError, ValueError, OSError) as exc:
+            QMessageBox.warning(self.panel, 'Catalogues not installed', str(exc))
+
+    def open_classification_browser(self):
+        group = self._selected_group()
+        if group is None:
+            QMessageBox.information(self.panel, 'Classifications', 'Select exactly one BIM object to classify it.')
+            return
+        from .classification_catalogue_dialog import ObjectClassificationDialog
+        dlg = ObjectClassificationDialog(self.app, group, load_document_data(self.app), self.panel)
+        if dlg.exec():
+            self.refresh_selected()
+
+    def migrate_catalogue(self):
+        from .catalogue_migration_dialog import CatalogueMigrationDialog
+        dlg = CatalogueMigrationDialog(self.app, self.panel)
+        if dlg.exec():
+            self.data = load_document_data(self.app)
+            self.refresh()
 
     def open_advanced(self):
         try:
@@ -140,7 +238,22 @@ class BimController:
         except Exception as exc:
             QMessageBox.critical(self.panel,"OpenTrace BIM",f"Could not open the advanced BIM editor:\n{type(exc).__name__}: {exc}")
 
+    def _source_signature(self):
+        # IngeTrazo replaces plugin_data[key] when its BIM data changes, but
+        # keeps that same dict object when only geometry/selection changes.
+        # Reading this identity avoids a JSON roundtrip of 15k codes on every
+        # new wall, slab or mouse selection. Never mutate the host-owned dict.
+        scene = self.app.scene
+        data = getattr(scene, 'plugin_data', {}) or {}
+        return (id(scene), id(data.get(getattr(self.app, 'key', ''), None)))
+
     def _document_changed(self):
+        signature = self._source_signature()
+        if signature == self._document_source_signature:
+            self.refresh_selected()
+            self.schedule_refresh()
+            return
+        self._document_source_signature = signature
         self.data = load_document_data(self.app)
         self.refresh()
 
@@ -155,21 +268,66 @@ class BimController:
         self.refresh_counts()
 
     def refresh(self):
+        setup = self.data.get('project_setup') or {}
+        pending = setup.get('migration_pending') or []
+        self.catalogue_status.setText(
+            'IFC catalogue: ' + str(setup.get('catalogue_name') or 'IFC4 built-in')
+            + (f' · {len(pending)} pending migrations' if pending else ''))
         project = self.data.get("project", {})
         export = self.data.get("export", {})
         mapping = (
-            (self.project_name, project.get("name", "")), (self.site_name, project.get("site", "")),
+            (self.project_name, project.get("name", "")), (self.client, project.get("client", "")),
+            (self.location, project.get("location", "")), (self.site_name, project.get("site", "")),
             (self.building_name, project.get("building", "")), (self.author, project.get("author", "")),
             (self.organization, project.get("organization", "")), (self.description, project.get("description", "")),
         )
         for widget, value in mapping:
             old = widget.blockSignals(True); widget.setText(str(value or "")); widget.blockSignals(old)
+        try:
+            from .levels import available_levels
+            level_names = [lv["name"] for lv in available_levels(self.app)]
+            self.project_levels_summary.setText(
+                "Pavimentos vinculados aos Níveis: " + (", ".join(level_names) if level_names else "nenhum nível cadastrado")
+            )
+        except Exception:
+            self.project_levels_summary.setText("Storeys: level data unavailable.")
+        old=self.export_schema.blockSignals(True)
+        idx=self.export_schema.findData(str(export.get('schema') or 'IFC4'))
+        self.export_schema.setCurrentIndex(idx if idx >= 0 else 0)
+        self.export_schema.blockSignals(old)
         old=self.export_profile.blockSignals(True);idx=self.export_profile.findData(str(export.get("profile") or "bonsai"));self.export_profile.setCurrentIndex(idx if idx>=0 else 0);self.export_profile.blockSignals(old)
         for widget, key in ((self.psets, "include_property_sets"), (self.layers, "include_material_layers"), (self.openings, "include_opening_relations"), (self.quantities, "include_quantities"), (self.styles,"include_styles"),(self.roundtrip,"include_parametric_roundtrip"),(self.repmaps,"use_representation_maps")):
             old = widget.blockSignals(True); widget.setChecked(bool(export.get(key, True))); widget.blockSignals(old)
         self._update_profile_ui()
         self.refresh_counts()
         self.refresh_selected()
+        # Host-neutral creation commands read this session cache. It is
+        # reconstructed from the saved .igz on each document change/reopen.
+        from .project_setup import catalogue_from_document
+        # A class catalogue can have >15,000 entries. Keep the scene-local
+        # index across object creation / BIM refresh, rebuilding only when the
+        # chosen catalogue or project's classifications change.
+        keys = setup.get('catalogue_keys') or []
+        library = self.data.get('libraries', {}).get('classifications', {})
+        catalogue_key = (self._source_signature(),
+                         self.data.get('spatial_ids', {}).get('project'),
+                         setup.get('catalogue_id'),
+                         setup.get('primary_classification_system'),
+                         len(library), tuple(keys))
+        if getattr(self, '_creation_catalogue_key', None) != catalogue_key:
+            self.app.scene._opentrace_catalogue_for_creation = catalogue_from_document(self.data)
+            self._creation_catalogue_key = catalogue_key
+        # Choose small preset lists once per setup, not every viewport event.
+        collection_key = (self._source_signature(),
+                          self.data.get('spatial_ids', {}).get('project'),
+                          setup.get('library_selection_mode'),
+                          tuple((p.get('id'), len(p.get('resources', ())))
+                                for p in setup.get('resource_libraries', ())
+                                if isinstance(p, dict)))
+        if getattr(self, '_resource_collection_key', None) != collection_key:
+            from .preset_catalog import set_active_collections
+            set_active_collections(self.data)
+            self._resource_collection_key = collection_key
 
     def _selected_group(self):
         scene = self.app.scene
@@ -192,7 +350,7 @@ class BimController:
             old = self.element_predefined.blockSignals(True); self.element_predefined.clear(); self.element_predefined.setEnabled(False); self.element_predefined.blockSignals(old)
             for combo in (self.common_status, self.common_external, self.common_loadbearing):
                 old = combo.blockSignals(True); combo.setCurrentIndex(0); combo.setEnabled(False); combo.blockSignals(old)
-            self.apply_element_btn.setEnabled(False); return
+            self.apply_element_btn.setEnabled(False); self.classification_browser_btn.setEnabled(False); return
         from .bim import KIND_TO_CLASS, element_kind
         raw_meta = getattr(group, "ifc", None)
         meta = raw_meta if isinstance(raw_meta, dict) else {}
@@ -212,8 +370,9 @@ class BimController:
             old = combo.blockSignals(True); combo.setEnabled(True)
             wanted = common.get(key, None); idx = combo.findData(wanted); combo.setCurrentIndex(idx if idx >= 0 else 0); combo.blockSignals(old)
         self.apply_element_btn.setEnabled(True)
+        self.classification_browser_btn.setEnabled(True)
 
-    def apply_selected_metadata(self):
+    def apply_selected_metadata(self, *_):
         group = self._selected_group()
         if group is None:
             return
@@ -223,6 +382,14 @@ class BimController:
         meta["predefined_type"] = self.element_predefined.currentText().strip().upper() or "NOTDEFINED"
         meta["classification_system"] = self.classification_system.text().strip()
         meta["classification_code"] = self.classification_code.text().strip()
+        # Never erase classification references for the other loaded systems.
+        # Explicitly edited principal is retained as an additional reference.
+        from .classification_assignments import add_reference
+        if meta["classification_system"] and meta["classification_code"]:
+            meta = add_reference(meta, {
+                'system': meta['classification_system'],
+                'code': meta['classification_code'],
+            }, primary=True)
         common = {
             "Reference": self.common_reference.text().strip() or None,
             "Status": self.common_status.currentData(),
@@ -231,9 +398,10 @@ class BimController:
             "FireRating": self.common_fire.text().strip() or None,
         }
         meta["common"] = {k: v for k, v in common.items() if v is not None}
-        set_ifc_metadata(self.app, group, meta)
-        self.status.setText("Element BIM data updated.")
-        self.refresh_selected()
+        if meta != ifc_identity_data(group):
+            set_ifc_metadata(self.app, group, meta)
+            self.status.setText("Element BIM data updated.")
+            self.refresh_selected()
 
     def refresh_counts(self):
         stats = scan_scene(self.app.scene)
@@ -249,13 +417,22 @@ class BimController:
         self.refresh_selected()
 
     def save(self, *_):
-        self.data["project"] = {
-            "name": self.project_name.text().strip(), "site": self.site_name.text().strip(),
-            "building": self.building_name.text().strip(), "author": self.author.text().strip(),
-            "organization": self.organization.text().strip(), "description": self.description.text().strip(),
-        }
+        # Merge instead of replacing the whole record: unknown project
+        # fields from a future release or imported BIM remain preserved.
+        project = dict(self.data.get("project") or {})
+        project.update({
+            "name": self.project_name.text().strip(),
+            "client": self.client.text().strip(),
+            "location": self.location.text().strip(),
+            "site": self.site_name.text().strip(),
+            "building": self.building_name.text().strip(),
+            "author": self.author.text().strip(),
+            "organization": self.organization.text().strip(),
+            "description": self.description.text().strip(),
+        })
+        self.data["project"] = project
         self.data["export"] = {
-            "schema": "IFC4", "profile": self.export_profile.currentData() or "bonsai", "include_property_sets": self.psets.isChecked(),
+            "schema": self.export_schema.currentData() or "IFC4", "profile": self.export_profile.currentData() or "bonsai", "include_property_sets": self.psets.isChecked(),
             "include_material_layers": self.layers.isChecked(),
             "include_opening_relations": self.openings.isChecked(),
             "include_quantities": self.quantities.isChecked(),
@@ -293,6 +470,9 @@ class BimController:
 
     def profile_changed(self,*_):
         self._update_profile_ui();self.save()
+
+    def schema_changed(self, *_):
+        self.save()
 
     def _choose_ifc(self,mode,linked):
         title="Open IFC as project" if mode=="open" else ("Link IFC" if linked else "Import IFC")

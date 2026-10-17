@@ -34,7 +34,6 @@ def _host_version_tuple(raw):
 
 
 WALL_TOOL_KEY = "arquitetura_parametrica_wall"
-CURVED_WALL_TOOL_KEY = "arquitetura_parametrica_curved_wall"
 VERTEX_TOOL_KEY = "arquitetura_parametrica_insert_vertex"
 MOVE_XY_TOOL_KEY = "arquitetura_parametrica_move_xy"
 MOVE_Z_TOOL_KEY = "arquitetura_parametrica_move_z"
@@ -45,7 +44,6 @@ MOVE_VERTEX_FREE_TOOL_KEY = "arquitetura_parametrica_move_vertex_free"
 MOVE_VERTEX_CONTINUE_TOOL_KEY = "arquitetura_parametrica_move_vertex_continue"
 WALL_STATION_Z_TOOL_KEY = "arquitetura_parametrica_wall_station_z"
 WALL_LEAN_TOOL_KEY = "arquitetura_parametrica_wall_lean"
-WALL_OPENING_TOOL_KEY = "arquitetura_parametrica_wall_opening"
 
 
 def require_reference_host(app):
@@ -98,10 +96,6 @@ def activate_wall(app):
     activate_tool(app, WALL_TOOL_KEY)
 
 
-def activate_curved_wall(app):
-    activate_tool(app, CURVED_WALL_TOOL_KEY)
-
-
 def activate_vertex_insert(app):
     activate_tool(app, VERTEX_TOOL_KEY)
 
@@ -138,8 +132,9 @@ def activate_wall_station_z(app):
 def activate_wall_lean(app):
     activate_tool(app, WALL_LEAN_TOOL_KEY)
 
-def activate_wall_opening(app):
-    activate_tool(app, WALL_OPENING_TOOL_KEY)
+
+
+
 
 
 def activate_select(app):
